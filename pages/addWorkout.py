@@ -1,4 +1,5 @@
 import streamlit as st
+from db import saveData
 
 with st.form(key="addWorkout", clear_on_submit=True, border=False):
 
@@ -12,3 +13,14 @@ with st.form(key="addWorkout", clear_on_submit=True, border=False):
     amount = st.number_input("Enter number: ", min_value=1, placeholder=5)
 
     addBtn = st.form_submit_button("Log Workout")
+
+if addBtn:
+    data = {
+        "date": date.isoformat(),
+        "time": time.strftime("%H:%M:%S"),
+        "type": type,
+        "amount": amount
+    }
+
+    saveData("workout", data)
+    st.success("Workout Logged!")

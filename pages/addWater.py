@@ -1,4 +1,5 @@
 import streamlit as st
+from db import saveData
 
 with st.form(key="addWater", clear_on_submit=True, border=False):
     st.header("Log water intake")
@@ -9,4 +10,13 @@ with st.form(key="addWater", clear_on_submit=True, border=False):
     amount = st.number_input("Enter water amount consumed (in Litres): ", min_value=0.01, placeholder=0.5)
 
     addBtn = st.form_submit_button("Log Water Intake")
-    
+
+if addBtn:
+    data = {
+        "date": date.isoformat(),
+        "time": time.strftime("%H:%M:%S"),
+        "amount": amount
+    }
+
+    saveData("water", data)
+    st.success("Water Intake Logged!")
