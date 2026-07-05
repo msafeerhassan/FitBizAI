@@ -9,7 +9,8 @@ def initDb():
             "diet": [],
             "water": [],
             "workout": [],
-            "context": []
+            "context": [],
+            "fortnightly": []
         }
 
         with open(FILE_PATH, "w") as file:
@@ -26,7 +27,8 @@ def saveData(category, data):
             "diet": [],
             "water": [],
             "workout": [],
-            "context": []
+            "context": [],
+            "fortnightly": []
         }
     
     if category in currentData:
