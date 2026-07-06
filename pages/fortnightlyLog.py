@@ -41,4 +41,4 @@ if submitBtn:
         }
 
         saveData("fortnightly", data)
-        st.success("Fortnightly Report Logged!")
+        st.success("Fortnightly Report Logged! Refresh to access whole application :)")
