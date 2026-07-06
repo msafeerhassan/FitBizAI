@@ -1,8 +1,0 @@
-Option to add diet at anytime -> Frontend done
-Option to log water drinking amount at any time -> frontend done
-Option to add workout at any time -> frontend done
-Option to add additional Context/Details at anytime -> done
-
-At end of day as per that timezone, this whole day data compiled into a kindof report that is given to AI alongwith history data for analysis of growth etc
-
-After each 2 weeks, app asks mandatory for picture of face and weight and on basis of that, further analysis and suggestions
