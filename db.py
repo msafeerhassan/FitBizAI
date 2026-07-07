@@ -1,6 +1,7 @@
 import json, os
 
 FILE_PATH = "record.json"
+USER_PROFILE_PATH = "userProfile.json"
 
 
 def initDb():
@@ -10,6 +11,7 @@ def initDb():
             "water": [],
             "workout": [],
             "context": [],
+            "productivity": [],
             "fortnightly": []
         }
 
@@ -28,6 +30,7 @@ def saveData(category, data):
             "water": [],
             "workout": [],
             "context": [],
+            "productivity": [],
             "fortnightly": []
         }
     
@@ -38,3 +41,19 @@ def saveData(category, data):
 
     with open(FILE_PATH, "w") as file:
         json.dump(currentData, file, indent=4, default=str)
+
+def saveUserProfile(data):
+    if not os.path.exists(USER_PROFILE_PATH) or os.stat(USER_PROFILE_PATH).st_size == 0:
+        initialStructure = {
+            "name": "",
+            "age": 0,
+            "height_in_cm": 0,
+            "location": "" 
+        }
+
+        with open(USER_PROFILE_PATH, "w") as file:
+            json.dump(initialStructure, file, indent=4)
+    
+
+    with open(USER_PROFILE_PATH, "w") as file:
+        json.dump(data, file, indent=4, default=str)

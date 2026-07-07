@@ -3,6 +3,7 @@ import json, os
 from datetime import date
 import datetime
 from ai import runAIdaily
+from db import saveData
 
 FILE_PATH = "record.json"
 
@@ -111,10 +112,10 @@ if btn:
             "water": [],
             "workout": [],
             "context": [],
-            "fortnightly": fullHistory.get("fortnightly", [])
+            "ai_reviews": []
         }
 
-        for category in ["diet", "water", "workout", "context"]:
+        for category in ["diet", "water", "workout", "context", "ai_reviews"]:
             for item in fullHistory.get(category, []):
                 try:
                     itemDate = datetime.date.fromisoformat(item.get("date", ""))
@@ -123,43 +124,68 @@ if btn:
                 except ValueError:
                     continue
         
-        SYSTEM_PROMPT = """You are a highly specialized Health and Fitness Coach. You will be given two data points: Today's Logs and Previous Records (limited to the last 14 days). Your core objective is to deeply analyze today's logs from a sustainable habit-building perspective, keeping visible historical trends in mind. 
+        todayStr = todayDate.isoformat()
+        todayImages = []
+        currentWeight = "Not Reported Today"
 
-        CRITICAL LOGIC RULES:
-        1. Sustainable Habit-Formation: Prioritize consistency over intense, abrupt changes. If a workout routine is deliberately kept small and low-friction (e.g., exactly 5 pushups) to guarantee long-term adherence, evaluate it positively for discipline and form, rather than docking points for low intensity.
-        2. Context Consideration: Always check the "Additional Context" field before grading. If the user eats junk food, drinks soft drinks, or experiences a deviation but clearly documents the reasons in the context log, adapt your feedback constructively. Do not aggressively penalize scores if deviations are explicitly explained or treated as part of a balanced, sustainable routine.
-        3. Constructive Goals: Point out explicit improvements or degradations relative to the past 14 days, and provide actionable, small recommendations for tomorrow.
-
-        Your response MUST be a valid JSON object matching this exact keys structure, with no markdown formatting or backticks around it:
-        {
-            "analysis": {
-                "positives": ["list of positive observations regarding consistency or communication"],
-                "negatives": ["list of constructive areas needing attention or improvement"],
-                "tomorrow_goals": ["1-2 hyper-specific, sustainable actions for tomorrow"]
-            },
-            "scores": {
-                "diet": 0.0,
-                "water": 0.0,
-                "workout": 0.0
-            }
-        }"""
+        for checkin in fullHistory.get("fortnightly", []):
+            if checkin.get("date") == todayStr:
+                todayImages = checkin.get("image_paths", [])
+                currentWeight = f"{checkin.get('weight')} kg"
+                break
         
-        USER_PROMPT = f""" Here is the current tracking data to evaluate:
-        TODAY'S LOGS:
-        - Water Intake: {todayData['water']:.2f} Litres
-        - Meals Consumed: {json.dumps(todayData['diet'], indent=2)}
-        - Workouts Executed: {json.dumps(todayData['workout'], indent=2)}
-        - Additional Log Context (Read this for exceptions/explanations): {json.dumps(todayData['context'], indent=2)}
-        PREVIOUS 14-DAY HISTORY (FOR BENCHMARKING):
-        {json.dumps(slicedHistory, indent=2)}
-        """
+        SYSTEM_PROMPT = """You are a highly specialized Health and Fitness Coach. You will evaluate Today's logs alongside a 14-day history baseline containing raw metric inputs and previous AI analysis reviews.
+
+                        CRITICAL COACHING OBJECTIVES:
+                        1. Consistency Baseline: Prioritize deliberate habit formation and routine maintenance over intensity. If routine workouts are explicitly low-friction (e.g. 5 pushups) to guarantee long-term discipline, score it highly for execution. 
+                        2. Direct Context Consideration: Prioritize reading the "Additional Context" parameters before reducing performance points. If nutrition deviations or lower outputs are clearly justified, adjust guidance constructively.
+                        3. Review Historical Continuity: Read through the "ai_reviews" list from previous days. Evaluate if the user is following your yesterday recommendations or if patterns are breaking down.
+                        4. Vision Progress Tracking (When Present): If facial progress pictures are attached to the payload, perform a technical look at physical muscle tones, skin clarity changes, puffiness levels, and biometric symmetry variations relative to the stated body weight. Provide structural adjustments for the next bi-weekly block.
+
+                        Your response MUST be a valid JSON object matching this exact structure, with no markdown code block backticks around it:
+                        {
+                            "analysis": {
+                                "positives": ["list of positive observations regarding consistency or communication"],
+                                "negatives": ["list of constructive areas needing attention or improvement"],
+                                "tomorrow_goals": ["1-2 hyper-specific, sustainable actions for tomorrow"]
+                            },
+                            "scores": {
+                                "diet": 0.0,
+                                "water": 0.0,
+                                "workout": 0.0
+                            }
+                        }"""
+        
+        USER_PROMPT = f"""
+                    Here is the complete configuration dataset for evaluation:
+
+                    TODAY'S METRICS:
+                    - Date: {todayStr}
+                    - Current Weight: {currentWeight}
+                    - Water Intake volume: {todayData['water']:.2f} Litres
+                    - Meals logged: {json.dumps(todayData['diet'], indent=2)}
+                    - Workouts performed: {json.dumps(todayData['workout'], indent=2)}
+                    - Additional Log Context: {json.dumps(todayData['context'], indent=2)}
+                    - Vision Assets Attached: {"Yes, 3 images provided" if todayImages else "No, this is a normal tracking day"}
+
+                    PREVIOUS 14-DAY PERFORMANCE HISTORY:
+                    {json.dumps(slicedHistory, indent=2)}
+                    """
 
         with st.spinner("Analyzing your today's progress..."):
             try:
-                response = runAIdaily(SYSTEM_PROMPT, USER_PROMPT)
+                response = runAIdaily(SYSTEM_PROMPT, USER_PROMPT, imagePaths=todayImages)
 
                 if response:
                     st.success("AI Coach Analysis Complete!")
+
+                    historicalData = {
+                        "date": todayStr,
+                        "scores": response.get("scores", {}),
+                        "summary_goals": response.get("analysis", {}).get("tomorrow_goals", [])
+                    }
+
+                    saveData("ai_reviews", historicalData)
 
                     st.markdown("### Today's Performance Scores")
                     scores = response.get("scores", {})
