@@ -13,7 +13,7 @@ with st.form(key="signup", border=False):
 
 if btn:
     data = {
-        "name": name, 
+        "name": name,
         "age": age,
         "height_in_cm": height,
         "location": location
