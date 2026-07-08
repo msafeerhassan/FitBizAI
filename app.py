@@ -40,6 +40,7 @@ addContextPage = st.Page("pages/addContext.py", title="Log Additional Context", 
 fortnightlyLogPage = st.Page("pages/fortnightlyLog.py", title="Mandatory Fortnightly Report", icon="🗓️")
 productivityLogPage = st.Page("pages/addProductivity.py", title="Log Work", icon="🕧")
 signupPage = st.Page("signup.py", title="Sign Up", icon="🪧")
+insightsPage = st.Page("insights.py", title="Insights", icon="📊")
 
 if existingUserCheck():
     if fortnightCheck():
@@ -50,7 +51,10 @@ if existingUserCheck():
 
     else:
         pg = st.navigation({
-            "Main": [homePage],
+            "Main": [
+                homePage,
+                insightsPage
+            ],
             "Options": [
                 addDietPage,
                 addWaterPage,
