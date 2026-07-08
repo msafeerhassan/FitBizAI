@@ -23,6 +23,34 @@ def encodeImg(imagePath):
             return f"data:image/{ext};base64,{encodedStr}"
     return None
 
+def runAIChat(SYSTEM_PROMPT, chatHistory, userMessage):
+    messagesList = [
+        {
+            "role": "system",
+            "content": SYSTEM_PROMPT
+        }
+    ]
+
+    for msg in chatHistory:
+        messagesList.append({
+            "role": msg["role"],
+            "content": msg["content"]
+        })
+    
+    messagesList.append({
+        "role" : "user",
+        "content": userMessage
+    })
+
+    response = client.chat.send(
+        model="qwen/qwen3-32b",
+        messages=messagesList,
+        stream=False
+    )
+
+    reply = response.choices[0].message.content
+
+    return reply
 
 def runAIdaily(SYSTEM_PROMPT, USER_PROMPT, imagePaths = None):
 
