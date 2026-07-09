@@ -42,6 +42,7 @@ productivityLogPage = st.Page("pages/addProductivity.py", title="Log Work", icon
 signupPage = st.Page("signup.py", title="Sign Up", icon="🪧")
 insightsPage = st.Page("insights.py", title="Insights", icon="📊")
 coachChatPage = st.Page("pages/coachChat.py", title="Chat with Coach", icon="🤖")
+manageLogsPage = st.Page("pages/manageLogs.py", title="Manage your Logs", icon="📒")
 
 if existingUserCheck():
     if fortnightCheck():
@@ -57,6 +58,7 @@ if existingUserCheck():
                 insightsPage
             ],
             "Options": [
+                manageLogsPage,
                 addDietPage,
                 addWaterPage,
                 addWorkoutPage,
