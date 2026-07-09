@@ -58,7 +58,50 @@ def loadData():
     except (json.JSONDecodeError, KeyError, ValueError):
         return todaysSummary, False
 
+def calculateStreak(history):
+    if not history:
+        return 0
+    
+    aiReviews = history.get("ai_reviews", [])
+    reviewDates = set()
+
+    for review in aiReviews:
+        reviewDateStr = review.get("date")
+        try:
+            reviewDate = datetime.date.fromisoformat(reviewDateStr)
+            reviewDates.add(reviewDate)
+        except (ValueError, TypeError):
+            continue
+    if not reviewDates:
+        return 0
+    
+    checkDate = date.today()
+
+    if checkDate not in reviewDates:
+        checkDate = checkDate - datetime.timedelta(days=1)
+        if checkDate not in reviewDates:
+            return 0
+    
+    streakCount = 0
+
+    while checkDate in reviewDates:
+        streakCount = streakCount + 1
+        checkDate = checkDate - datetime.timedelta(days=1)
+    
+    return streakCount
+
 todayData, fullHistory = loadData()
+
+currentStreak = calculateStreak(fullHistory)
+
+if currentStreak == 1:
+    streakLabel = "1 day"
+else:
+    streakLabel = f"{currentStreak} days"
+
+st.metric("🔥 Daily Reporting Streak", value=streakLabel)
+
+st.divider()
 
 st.subheader(f"Today's Progress - {date.today().strftime('%B %d, %Y')}")
 
@@ -223,6 +266,7 @@ else:
                         2. Direct Context Consideration: Prioritize reading the "Additional Context" parameters before reducing performance points. If nutrition deviations or lower outputs are clearly justified, adjust guidance constructively.
                         3. Review Historical Continuity: Read through the "ai_reviews" list from previous days. Evaluate if the user is following your yesterday recommendations or if patterns are breaking down.
                         4. Vision Progress Tracking (When Present): If facial progress pictures are attached to the payload, perform a technical look at physical muscle tones, skin clarity changes, puffiness levels, and biometric symmetry variations relative to the stated body weight. Provide structural adjustments for the next bi-weekly block.
+                        5. Weight and progress photos are only collected every 14 days as part of the fortnightly report , not daily. If "Current Weight" shows "Not Reported Today", this is completely normal and expected - do NOT comment on it or ask user to log it or treat it as missed task. Only reference weight/vision data on days its Available and present.
 
                         Your response MUST be a valid JSON object matching this exact structure, with no markdown code block backticks around it:
                         {
@@ -268,7 +312,7 @@ else:
                         historicalData = {
                             "date": todayStr,
                             "scores": response.get("scores", {}),
-                            "summary_goals": response.get("analysis", {}).get("tomorrow_goals", [])
+                            "analysis": response.get("analysis", {})
                         }
 
                         saveData("ai_reviews", historicalData)
@@ -326,3 +370,161 @@ else:
                         st.error("AI Response Failed :(")
                 except Exception as e:
                     st.error(f"Unexpected Error: {e}")
+
+st.divider()
+
+st.markdown("### Weekly Recap")
+
+def earliestLogDate(history):
+    if not history:
+        return None
+    
+    earliestDate = None
+    categories = [
+        "diet",
+        "water",
+        "workout",
+        "context",
+        "productivity"
+    ]
+
+    for category in categories:
+        categoryRecords = history.get(category, [])
+        for item in categoryRecords:
+            itemDateStr = item.get("date", "")
+            try:
+                itemDate = datetime.date.fromisoformat(itemDateStr)
+            except ValueError:
+                continue
+
+            if earliestDate is None:
+                earliestDate = itemDate
+            elif itemDate < earliestDate:
+                earliestDate = itemDate
+    return earliestDate
+
+def weeklyRecapCheck(history):
+    if not history:
+        return False
+    
+    earliestDate = earliestLogDate(history)
+    if earliestDate is None:
+        return False
+    
+    todayDate = date.today()
+    weeklyRecaps = history.get("weekly_recap", [])
+
+    if not weeklyRecaps:
+        daysSinceStart = (todayDate - earliestDate).days
+        return daysSinceStart >= 7
+
+    lastRecap = weeklyRecaps[-1]
+
+    lastRecapDateStr = lastRecap.get("date")
+
+    try:
+        lastRecapDate = datetime.date.fromisoformat(lastRecapDateStr)
+    except (ValueError, TypeError):
+        return None
+    
+    daysSinceLastRecap = (todayDate - lastRecapDate).days
+
+    return daysSinceLastRecap >= 7
+
+if fullHistory:
+    weeklyRecaps = fullHistory.get("weekly_recap", [])
+else:
+    weeklyRecaps = []
+
+if weeklyRecaps:
+    latestRecap = weeklyRecaps[-1]
+
+    st.info(f"Latest Weekly Recap - {latestRecap.get('date')}")
+    st.write(latestRecap.get("weekly_summary", ""))
+
+    achievements = latestRecap.get("achievements", [])
+
+    if achievements:
+        st.markdown("#### Achievements")
+        for item in achievements:
+            st.write(item)
+
+    areasToImprove = latestRecap.get("areas_to_improve", [])
+    if areasToImprove:
+        st.markdown("#### Areas to Improve")
+        for item in areasToImprove:
+            st.write(item)
+
+    nextWeekFocus = latestRecap.get("next_week_focus", [])
+    if nextWeekFocus:
+        st.markdown("#### Next Week's Focus")
+        for item in nextWeekFocus:
+            st.info(item)
+else:
+    st.caption("No Weekly Recap Generated Yet :(")
+
+if weeklyRecapCheck(fullHistory):
+    btn = st.button("Generate Weekly Recap", type="primary")
+
+    if btn:
+        sevenDaysAgo = date.today() - datetime.timedelta(days=7)
+
+        slicedWeek = {
+            "diet": [],
+            "water": [],
+            "workout": [],
+            "context": [],
+            "productivity": []
+        }
+
+        for category in ["diet", "water", "workout", "context", "productivity"]:
+            categoryRecords = fullHistory.get(category, [])
+            
+            for item in categoryRecords:
+                itemDateStr = item.get("date", "")
+                try:
+                    itemDate = datetime.date.fromisoformat(itemDateStr)
+                except ValueError:
+                    continue
+
+                if itemDate >= sevenDaysAgo and itemDate < date.today():
+                    slicedWeek[category].append(item)
+        
+        SYSTEM_PROMPT_WEEKLY = """You are a health and fitness coach writing a weekly recap based on user's last 7 days of logs.
+        
+Your response MUST be a valid JSON object matching this exact structure, with no markdown code block backticks etc:
+{
+    "weekly_summary": "a short 2-3 sentence overview of how this week went overall",
+    "achievements": ["list of specific things the user did well this week"],
+    "areas_to_improve": ["list of specific, constructive areas needing attention"],
+    "next_week_focus": ["1-3 specific, achievable goals for next week"]
+}"""
+
+        USER_PROMPT_WEEKLY = f"""
+Here is the user's data for the past 7 days:
+{json.dumps(slicedWeek, indent=2)}
+"""
+        
+        with st.spinner("Compiling your weekly recap..."):
+            try:
+                weeklyResponse = runAIdaily(SYSTEM_PROMPT_WEEKLY, USER_PROMPT_WEEKLY)
+
+                if weeklyResponse:
+                    weeklyRecapData = {
+                        "date": date.today().isoformat(),
+                        "weekly_summary": weeklyResponse.get("weekly_summary", ""),
+                        "achievements": weeklyResponse.get("achievements", []),
+                        "areas_to_improve": weeklyResponse.get("areas_to_improve", []),
+                        "next_week_focus": weeklyResponse.get("next_week_focus", [])
+                    }
+
+                    saveData("weekly_recap", weeklyRecapData)
+                    st.success("Weekly Recap Generated!")
+                    st.rerun()
+                else:
+                    st.error("Weekly Recap Generation failed :(")
+
+            except Exception as e:
+                st.error(f"Unexpected Error: {e}")
+else:
+    st.caption("Your next weekly recap will be available once the current week is over :)")

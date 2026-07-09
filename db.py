@@ -12,7 +12,8 @@ def initDb():
             "workout": [],
             "context": [],
             "productivity": [],
-            "fortnightly": []
+            "fortnightly": [],
+            "weekly_recap": []
         }
 
         with open(FILE_PATH, "w") as file:
@@ -31,7 +32,8 @@ def saveData(category, data):
             "workout": [],
             "context": [],
             "productivity": [],
-            "fortnightly": []
+            "fortnightly": [],
+            "weekly_recap": []
         }
     
     if category in currentData:
