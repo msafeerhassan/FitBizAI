@@ -181,3 +181,52 @@ with waterTab:
                 st.session_state["editKey"] = None
                 st.success("Entry Updated")
                 st.rerun()
+
+with workoutTab:
+    workoutRecords = recordData.get("workout", [])
+    filteredWorkout = sortEntries(workoutRecords, startDate, endDate)
+
+    if not filteredWorkout:
+        st.caption("No workout entries in this date range!")
+    
+    for i, entry in filteredWorkout:
+        entryKey = "workout_" + str(i)
+
+        listCol, editCol, deleteCol = st.columns([6,1,1])
+
+        with listCol:
+            st.write(f"**{entry.get('date')} {entry.get('time')}** - {entry.get('type')} ({entry.get('amount')})")
+        with editCol:
+            editClicked = st.button("Edit", key="editbtn_" + entryKey)
+
+            if editClicked:
+                st.session_state["editKey"] = entryKey
+        
+        with deleteCol:
+            deleteClicked = st.button("Delete", key="deleteBtn_" + entryKey)
+            if deleteClicked:
+                workoutRecords.pop(i)
+                saveFullRecordData(recordData)
+                st.success("Entry Deleted!")
+                st.rerun()
+        
+        if st.session_state["editKey"] == entryKey:
+            with st.form(key="editForm_" + entryKey):
+                st.markdown("#### Edit Workout Entry")
+
+                newDate = st.date_input("Date: ", value=date.fromisoformat(entry.get("date")))
+                newTime = st.time_input("Time: ", value=time.fromisoformat(entry.get("time")))
+                newType = st.text_input("Workout Type: ", value=entry.get("type"))
+                newAmount = st.number_input("Amount: ", value=int(entry.get("amount")), min_value=1)
+
+                saveBtn = st.form_submit_button("Save Changes")
+            if saveBtn:
+                workoutRecords[i]["date"] = newDate.isoformat()
+                workoutRecords[i]["time"] = newTime.strftime("%H:%M:%S")
+                workoutRecords[i]["type"] = newType
+                workoutRecords[i]["amount"] = newAmount
+
+                saveFullRecordData(recordData)
+                st.session_state["editKey"] = None
+                st.success("Entry Updated!")
+                st.rerun()
