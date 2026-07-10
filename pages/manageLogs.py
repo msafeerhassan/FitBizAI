@@ -135,3 +135,49 @@ with dietTab:
                 st.session_state["editKey"] = None
                 st.success("Entry Updated")
                 st.rerun()
+
+with waterTab:
+    waterRecords = recordData.get("water", [])
+    filteredWater = sortEntries(waterRecords, startDate, endDate)
+
+    if not filteredWater:
+        st.caption("No water entries logged in this date range")
+    
+    for i, entry in filteredWater:
+        entryKey = "water_" + str(i)
+
+        listCol, editCol, deleteCol = st.columns([6,1,1])
+
+        with listCol:
+            st.write(f"**{entry.get('date')} {entry.get('time')}** - {entry.get('amount')} L")
+        with editCol:
+            editClicked = st.button("Edit", key="editbtn_" + entryKey)
+            if editClicked:
+                st.session_state["editKey"] = entryKey
+        with deleteCol:
+            deleteClicked = st.button("Delete", key="deleteBtn_" + entryKey)
+            if deleteClicked:
+                waterRecords.pop(i)
+                saveFullRecordData(recordData)
+                st.success("Entry Deleted!")
+                st.rerun()
+        
+        if st.session_state["editKey"] == entryKey:
+            with st.form(key="editForm_" + entryKey):
+                st.markdown("#### Edit Water Entry")
+
+                newDate = st.date_input("Date: ", value=date.fromisoformat(entry.get("date")))
+                newTime = st.time_input("Time: ", value=time.fromisoformat(entry.get("time")))
+                newAmount = st.number_input("Amount (Liters): ", value=float(entry.get("amount")), min_value=0.01)
+
+                saveBtn = st.form_submit_button("Save Changes")
+            if saveBtn:
+                waterRecords[i]["date"] = newDate.isoformat()
+                waterRecords[i]["time"] = newTime.strftime("%H:%M:%S")
+                waterRecords[i]["amount"] = newAmount
+
+                saveFullRecordData(recordData)
+
+                st.session_state["editKey"] = None
+                st.success("Entry Updated")
+                st.rerun()
