@@ -3,7 +3,7 @@ import json, os
 from datetime import date
 import datetime
 from ai import runAIdaily
-from db import saveData
+from db import saveData, loadUserProfile
 
 FILE_PATH = "record.json"
 USER_PROFILE_PATH = "userProfile.json"
@@ -92,6 +92,17 @@ def calculateStreak(history):
 
 todayData, fullHistory = loadData()
 
+userProfile = loadUserProfile()
+
+if userProfile:
+    waterTarget = userProfile.get("water_target_litres", 1.0)
+    workoutTarget = userProfile.get("workout_sessions_target", 1)
+    productivityTarget = userProfile.get("productivity_minutes_target", 10)
+else:
+    waterTarget = 1
+    workoutTarget = 1
+    productivityTarget = 10
+
 currentStreak = calculateStreak(fullHistory)
 
 if currentStreak == 1:
@@ -108,13 +119,17 @@ st.subheader(f"Today's Progress - {date.today().strftime('%B %d, %Y')}")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.metric(label="Total Water Intake", value=f"{todayData['water']:.2f} L")
+    waterDelta = todayData["water"] - waterTarget
+    st.metric(label="Total Water Intake", value=f"{todayData['water']:.2f} L", delta=f"{waterDelta:.2f}L (Target: {waterTarget}L)")
 with col2:
     st.metric(label="Meals Logged Today", value=f"{len(todayData["diet"])} meals")
 with col3:
-    st.metric(label="Today's Workout", value=f"{len(todayData["workout"])} sessions")
+    workoutCount = len(todayData["workout"])
+    workoutDelta = workoutCount - workoutTarget
+    st.metric(label="Today's Workout", value=f"{workoutCount} sessions", delta=f"{workoutDelta} (Target: {workoutTarget} Sessions)")
 with col4:
-    st.metric(label="Productive Time Spending", value=f"{todayData["productivity"]} Min")
+    productivityDelta = todayData["productivity"] - productivityTarget
+    st.metric(label="Productive Time Spending", value=f"{todayData["productivity"]} Min", delta=f"{productivityDelta:.0f} min (Target:{productivityTarget} min)")
 
 
 st.divider()
