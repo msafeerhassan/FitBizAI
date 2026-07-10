@@ -230,3 +230,53 @@ with workoutTab:
                 st.session_state["editKey"] = None
                 st.success("Entry Updated!")
                 st.rerun()
+
+with contextTab:
+    contextRecords = recordData.get("context" ,[])
+    filteredContext = sortEntries(contextRecords, startDate, endDate)
+
+    if not filteredContext:
+        st.caption("No context entries in this date range!")
+    
+    for i, entry in filteredContext:
+        entryKey = "context_" + str(i)
+
+        listCol, editCol, deleteCol = st.columns([6,1,1])
+
+        with listCol:
+            st.write(f"**{entry.get('date')} {entry.get('time')}** - {entry.get('text')}")
+        with editCol:
+            editClicked = st.button("Edit", key="editbtn_" + entryKey)
+
+            if editClicked:
+                st.session_state["editKey"] = entryKey
+        with deleteCol:
+            deleteClicked = st.button("Delete", key="deleteBtn_" + entryKey)
+            if deleteClicked:
+                contextRecords.pop(i)
+                saveFullRecordData(recordData)
+                st.success("Entry Deleted!")
+                st.rerun()
+
+        if st.session_state["editKey"] == entryKey:
+            with st.form(key="editForm_" + entryKey):
+                st.markdown("#### Edit Context Entry")
+
+                newDate = st.date_input("Date: ", value=date.fromisoformat(entry.get("date")))
+                newTime = st.time_input("Time: ", value=time.fromisoformat(entry.get("time")))
+                newText = st.text_area("Log: ", value=entry.get("text"))
+
+                saveBtn = st.form_submit_button("Save Changes")
+        
+
+            if saveBtn:
+                contextRecords[i]["date"] = newDate.isoformat()
+                contextRecords[i]["time"] = newTime.strftime("%H:%M:%S")
+                contextRecords[i]["text"] = newText
+
+                saveFullRecordData(recordData)
+
+                st.session_state["editKey"] = None
+                st.success("Entry Updated :)")
+                
+                st.rerun()
