@@ -280,3 +280,54 @@ with contextTab:
                 st.success("Entry Updated :)")
                 
                 st.rerun()
+
+with productivityTab:
+    productivityRecords = recordData.get("productivity", [])
+    filteredProductivity = sortEntries(productivityRecords, startDate, endDate)
+
+    if not filteredProductivity:
+        st.caption("No productivity entries in this date range :(")
+
+    for i, entry in filteredProductivity:
+        entryKey = "productivity_" + str(i)
+
+        listCol, editCol, deleteCol = st.columns([6, 1,1])
+
+        with listCol:
+            st.write(f"**{entry.get('date')} {entry.get("time")}** - {entry.get('type')} ({entry.get('time_spent')} min)")
+        with editCol:
+            editClicked = st.button("Edit", key="editbtn_" + entryKey)
+            if editClicked:
+                st.session_state["editKey"] = entryKey
+
+        with deleteCol:
+            deleteClicked = st.button("Delete", key="deleteBtn_" + entryKey)
+
+            if deleteClicked:
+                productivityRecords.pop(i)
+                saveFullRecordData(recordData)
+                st.success("Entry Deleted!")
+                st.rerun()
+        
+        if st.session_state["editKey"] == entryKey:
+            with st.form(key="editForm_" + entryKey):
+                st.markdown("#### Edit Productivity Entry")
+
+                newDate = st.date_input("Date: ", value=date.fromisoformat(entry.get("date")))
+                newTime = st.time_input("Time: ", value=time.fromisoformat(entry.get("time")))
+                newType = st.text_input("Type: " , value=entry.get("type"))
+                newTimeSpent = st.number_input("Minutes Spent: ", value=int(entry.get("time_spent")), min_value=1)
+
+                saveBtn = st.form_submit_button("Save Changes")
+            
+            if saveBtn:
+                productivityRecords[i]["date"] = newDate.isoformat()
+                productivityRecords[i]["time"] = newTime.strftime("%H:%M:%S")
+                productivityRecords[i]["type"] = newType
+                productivityRecords[i]["time_spent"] = newTimeSpent
+
+                saveFullRecordData(recordData)
+                st.session_state["editKey"] = None
+                st.success("Entry Updated!")
+                
+                st.rerun()

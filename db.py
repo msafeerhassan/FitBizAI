@@ -50,7 +50,10 @@ def saveUserProfile(data):
             "name": "",
             "age": 0,
             "height_in_cm": 0,
-            "location": "" 
+            "location": "",
+            "water_target_litres": 1.0,
+            "workout_sessions_target": 1,
+            "productivity_minutes_target": 10
         }
 
         with open(USER_PROFILE_PATH, "w") as file:
@@ -90,3 +93,13 @@ def saveFullRecordData(data):
     with open(FILE_PATH, "w") as file:
         json.dump(data, file, indent=4, default=str)
 
+def loadUserProfile():
+    if not os.path.exists(USER_PROFILE_PATH) or os.stat(USER_PROFILE_PATH).st_size == 0:
+        return None
+
+    try:
+        with open(USER_PROFILE_PATH, "r") as file:
+            profile = json.load(file)
+            return profile
+    except json.JSONDecodeError:
+        return None
