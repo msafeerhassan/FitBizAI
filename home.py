@@ -8,8 +8,8 @@ from db import saveData, loadUserProfile
 FILE_PATH = "record.json"
 USER_PROFILE_PATH = "userProfile.json"
 
-st.set_page_config(page_title="FitBizAI - Home", page_icon="🏋️‍♂️")
-st.title("FitBizAI - Dashboard")
+st.set_page_config(page_title="FitBizAI - Home")
+st.title("FitBizAI")
 
 def loadData():
     todayDateStr = date.today().isoformat()

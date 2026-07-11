@@ -1,6 +1,2 @@
-/uploads
 /__pycache__
-record.json
 .env
-userProfile.json
-chatHistory.json
