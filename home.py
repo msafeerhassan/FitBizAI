@@ -90,6 +90,54 @@ def calculateStreak(history):
     
     return streakCount
 
+def getDayTotal(history, category, checkDate, valueKey=None, mode="sum"):
+    if not history:
+        return 0.0
+    
+    checkDateStr = checkDate.isoformat()
+    records = history.get(category, [])
+
+    if mode == "count":
+        total = 0
+        for record in records:
+            if record.get("date") == checkDateStr:
+                total = total + 1
+        return total
+    else:
+        total = 0.0
+        for record in records:
+            if record.get("date") == checkDateStr:
+                rawValue = record.get(valueKey, 0)
+                try:
+                    total = total + float(rawValue)
+                except (ValueError, TypeError):
+                    total = total
+        return total
+
+def calculateGoalStreak(history, category, targetValue, valueKey=None, mode="sum"):
+    if not history:
+        return 0
+    
+    checkDate = date.today()
+    todayTotal = getDayTotal(history, category, checkDate, valueKey, mode)
+
+    if todayTotal < targetValue:
+        checkDate = checkDate - datetime.timedelta(days=1)
+        yesterdayTotal = getDayTotal(history, category, checkDate, valueKey, mode)
+
+        if yesterdayTotal < targetValue:
+            return 0
+    streakCount = 0
+
+    while True:
+        dayTotal = getDayTotal(history, category, checkDate, valueKey, mode)
+        if dayTotal >= targetValue:
+            streakCount = streakCount + 1
+            checkDate = checkDate - datetime.timedelta(days=1)
+        else:
+            break
+    return streakCount
+
 todayData, fullHistory = loadData()
 
 userProfile = loadUserProfile()
@@ -111,6 +159,20 @@ else:
     streakLabel = f"{currentStreak} days"
 
 st.metric("🔥 Daily Reporting Streak", value=streakLabel)
+
+waterStreak = calculateGoalStreak(fullHistory, "water", waterTarget, valueKey="amount", mode="sum")
+workoutStreak = calculateGoalStreak(fullHistory, "workout", workoutTarget, mode="count")
+productivityStreak = calculateGoalStreak(fullHistory, "productivity", productivityTarget, valueKey="time_spent", mode="sum")
+
+streakCol1, streakCol2, streakCol3 = st.columns(3)
+
+with streakCol1:
+    st.metric(label="Water Target Streak", value=f"{waterStreak} days")
+with streakCol2:
+    st.metric(label="Workout Target Streak", value=f"{workoutStreak} days")
+with streakCol3:
+    st.metric(label="Productivity Target Streak", value=f"{productivityStreak} days")
+    
 
 st.divider()
 
@@ -179,6 +241,18 @@ def todayReviewExist(history):
             return review
     return None
 
+def getYesterdayGoals(history):
+    if not history:
+        return []
+
+    yesterdayStr = (date.today() - datetime.timedelta(days=1)).isoformat()
+
+    for review in history.get("ai_reviews", []):
+        if review.get("date") == yesterdayStr:
+            return review.get("analysis", {}).get("tomorrow_goals", [])
+    
+    return []
+
 existingReview = todayReviewExist(fullHistory)
 
 if existingReview:
@@ -198,6 +272,16 @@ if existingReview:
         st.metric("Productivity Score", f"{scores.get("productivity", 0.0)}/10")
                     
     st.divider()
+
+    existingGoalReview = existingReview.get("goal_review", {})
+    if existingGoalReview.get("had_goals_yesterday"):
+        st.markdown("#### Yesterday's Goals - Did you fulfilled them?")
+        existingVerdicts = existingGoalReview.get("verdict", [])
+        if existingVerdicts:
+            for verdict in existingVerdicts:
+                st.write(verdict)
+        
+        st.divider()
 
     analysis = existingReview.get("analysis", {})
     posCol, negCol = st.columns(2)
@@ -282,13 +366,17 @@ else:
                         3. Review Historical Continuity: Read through the "ai_reviews" list from previous days. Evaluate if the user is following your yesterday recommendations or if patterns are breaking down.
                         4. Vision Progress Tracking (When Present): If facial progress pictures are attached to the payload, perform a technical look at physical muscle tones, skin clarity changes, puffiness levels, and biometric symmetry variations relative to the stated body weight. Provide structural adjustments for the next bi-weekly block.
                         5. Weight and progress photos are only collected every 14 days as part of the fortnightly report , not daily. If "Current Weight" shows "Not Reported Today", this is completely normal and expected - do NOT comment on it or ask user to log it or treat it as missed task. Only reference weight/vision data on days its Available and present.
-
+                        6. You will be given the specific goals you set for the user yesterday. Directly and honestly evaluate, using today's logged data, whether each of the goal was fulfilled, partially met or missed. Be specific and reference the actual number/logs - don't give vague praise or vague criticism
                         Your response MUST be a valid JSON object matching this exact structure, with no markdown code block backticks around it:
                         {
                             "analysis": {
                                 "positives": ["list of positive observations regarding consistency or communication"],
                                 "negatives": ["list of constructive areas needing attention or improvement"],
                                 "tomorrow_goals": ["1-2 hyper-specific, sustainable actions for tomorrow"]
+                            },
+                            "goal_review": {
+                                "had_goals_yesterday": True,
+                                "verdict": ["one entry per goal from yesterday, stating whether it was met, partially met or missed with a short reasoning."]
                             },
                             "scores": {
                                 "diet": 0.0,
@@ -297,9 +385,13 @@ else:
                                 "productivity": 0.0
                             }
                         }"""
-        
+
+            yesterdayGoals = getYesterdayGoals(fullHistory)
+
             USER_PROMPT = f"""
                     Here is the complete configuration dataset for evaluation:
+
+                    GOALS SET FOR TODAY (from yesterday's report): {json.dumps(yesterdayGoals) if yesterdayGoals else "No goals were set yesterday - either this is a new user or yesterday's report was skipped :(."}
 
                     TODAY'S METRICS:
                     - Date: {todayStr}
@@ -327,7 +419,8 @@ else:
                         historicalData = {
                             "date": todayStr,
                             "scores": response.get("scores", {}),
-                            "analysis": response.get("analysis", {})
+                            "analysis": response.get("analysis", {}),
+                            "goal_review": response.get("goal_review", {})
                         }
 
                         saveData("ai_reviews", historicalData)
@@ -346,7 +439,16 @@ else:
                         with scCol4:
                             st.metric("Productivity Score", f"{scores.get("productivity", 0.0)}/10")
                     
-                        st.divider()
+                        goalReview = response.get("goal_review", {})
+
+                        if goalReview.get("had_goals_yesterday"):
+                            st.markdown("#### Yesterday's Goals - Did You Fulfilled them?")
+                            verdicts = goalReview.get("verdict", [])
+
+                            if verdicts:
+                                for verdict in verdicts:
+                                    st.write(verdict)
+                            st.divider()
 
                         analysis = response.get("analysis", {})
                         posCol, negCol = st.columns(2)

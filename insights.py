@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
 import json, os
+from db import loadUserProfile
 
 RECORD_FILE = "record.json"
 
@@ -120,6 +121,18 @@ if not data:
     st.stop()
 
 dateRange = getDateRange(daysRange)
+
+userProfile = loadUserProfile()
+
+if userProfile:
+    waterTarget = userProfile.get("water_target_litres", 1.0)
+    workoutTarget = userProfile.get("workout_sessions_target", 1)
+    productivityTarget = userProfile.get("productivity_minutes_target", 10)
+else:
+    waterTarget = 1.0
+    workoutTarget = 1
+    productivityTarget = 10
+
 weightDateRange = getDateRange(weightDaysRange)
 
 st.markdown("### Water Intake (Litres/day)")
@@ -127,22 +140,47 @@ st.markdown("### Water Intake (Litres/day)")
 waterRecords = data.get("water", [])
 
 waterData = aggrDaily(waterRecords, dateRange, valueKey="amount", mode="sum")
-waterSeries = pd.Series(waterData, name="Litres")
-st.line_chart(waterSeries)
+waterChartData = {}
+
+for isoDate in waterData:
+    waterChartData[isoDate] = {
+        "Actual [L]": waterData[isoDate],
+        "Target [L]": waterTarget
+    }
+
+waterDf = pd.DataFrame.from_dict(waterChartData, orient="index")
+st.line_chart(waterDf)
 
 st.markdown("### Workout Sessions (count/day)")
 
 workoutRecords = data.get("workout", [])
 workoutData = aggrDaily(workoutRecords, dateRange, mode="count")
-workoutSeries = pd.Series(workoutData, name="Sessions")
-st.bar_chart(workoutSeries)
+
+workoutChartData = {}
+
+for isoDate in workoutData:
+    workoutChartData[isoDate] = {
+        "Actual Sessions": workoutData[isoDate],
+        "Target Sessions": workoutTarget
+    }
+
+workoutDf = pd.DataFrame.from_dict(workoutChartData, orient="index")
+st.line_chart(workoutDf)
 
 st.markdown("### Productive Minutes Spent/day")
 
 productivityRecord = data.get("productivity", [])
 productivityData = aggrDaily(productivityRecord, dateRange, valueKey="time_spent", mode="sum")
-productivitySeries = pd.Series(productivityData, name="Minutes")
-st.line_chart(productivitySeries)
+productivityChartData = {}
+
+for isoDate in productivityData:
+    productivityChartData[isoDate] = {
+        "Actual (min)": productivityData[isoDate],
+        "Target (min)": productivityTarget
+    }
+
+productivityDf = pd.DataFrame.from_dict(productivityChartData, orient="index")
+st.line_chart(productivityDf)
 
 st.markdown("### AI Coach Scores (out of 10)")
 
