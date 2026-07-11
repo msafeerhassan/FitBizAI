@@ -32,7 +32,7 @@ def existingUserCheck():
     else:
         return True
 
-homePage = st.Page("home.py", title="Home", default=True)
+homePage = st.Page("home.py", title="Home", default=True, icon="🏠")
 addDietPage = st.Page("pages/addDiet.py", title="Log Meal Intake", icon="🍴")
 addWaterPage = st.Page("pages/addWater.py", title="Log Water Intake", icon="💧")
 addWorkoutPage = st.Page("pages/addWorkout.py", title="Log Workout", icon="🏋️‍♂️")
@@ -45,6 +45,7 @@ coachChatPage = st.Page("pages/coachChat.py", title="Chat with Coach", icon="�
 manageLogsPage = st.Page("pages/manageLogs.py", title="Manage your Logs", icon="📒")
 targetsPage = st.Page("pages/targets.py", title="Manage Targets", icon="🎯")
 progressPhotosPage = st.Page("pages/progressPhotos.py", title="Progress Photos", icon="🖼️")
+achievementsPage = st.Page("pages/achievements.py", title="Achievements", icon="🏆")
 
 if existingUserCheck():
     if fortnightCheck():
@@ -57,7 +58,8 @@ if existingUserCheck():
         pg = st.navigation({
             "Main": [
                 homePage,
-                insightsPage
+                insightsPage,
+                achievementsPage
             ],
             "Options": [
                 manageLogsPage,
