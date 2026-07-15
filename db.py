@@ -1,105 +1,183 @@
-import json, os
+import os, requests
 
-FILE_PATH = "record.json"
-USER_PROFILE_PATH = "userProfile.json"
-CHAT_HISTORY_PATH = "chatHistory.json"
+from dotenv import load_dotenv
 
-def initDb():
-    if not os.path.exists(FILE_PATH) or os.stat(FILE_PATH).st_size == 0:
-        initialStructure = {
-            "diet": [],
-            "water": [],
-            "workout": [],
-            "context": [],
-            "productivity": [],
-            "fortnightly": [],
-            "weekly_recap": []
-        }
+load_dotenv()
 
-        with open(FILE_PATH, "w") as file:
-            json.dump(initialStructure, file, indent=4)
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-def saveData(category, data):
-    initDb()
+headers = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json"
+}
 
-    try:
-        with open(FILE_PATH, "r") as file:
-            currentData = json.load(file)
-    except json.JSONDecodeError:
-        currentData = {
-            "diet": [],
-            "water": [],
-            "workout": [],
-            "context": [],
-            "productivity": [],
-            "fortnightly": [],
-            "weekly_recap": []
-        }
+def get(path, params=None):
+    response = requests.get(f"{SUPABASE_URL}/rest/v1/{path}", headers=headers, params=params)
+    response.raise_for_status()
+    return response.json()
+
+def post(path, body, extra_headers=None):
+    hd = dict(headers)
+
+    if extra_headers:
+        hd.update(extra_headers)
     
-    if category in currentData:
-        currentData[category].append(data)
-    else:
-        currentData[category] = [data]
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/{path}",
+        headers=hd,
+        json=body
+    )
 
-    with open(FILE_PATH, "w") as file:
-        json.dump(currentData, file, indent=4, default=str)
+    response.raise_for_status()
+
+    if response.text:
+        return response.json()
+    else:
+        return None
+
+def patch(path, body):
+    response = requests.patch(f"{SUPABASE_URL}/rest/v1/{path}", headers=headers, json=body)
+    response.raise_for_status()
+    
+    if response.text:
+        return response.json()
+    else:
+        return None
+
+def delete(path):
+    response = requests.delete(f"{SUPABASE_URL}/rest/v1/{path}", headers=headers)
+
+    response.raise_for_status()
+
+    if response.text:
+        return response.json()
+    else:
+        return None
+    
+def saveData(category, data):
+    if category == "ai_reviews":
+        reserved = ("date",)
+    else:
+        reserved = ("date", "time")
+
+    payload = {}
+
+    for k, v in data.items():
+        if k not in reserved:
+            payload[k] = v
+        
+    body = {
+        "category": category,
+        "log_date": data.get("date"),
+        "log_time": data.get("time", "00:00:00"),
+        "payload": payload
+    }
+
+    post("logs", body)
 
 def saveUserProfile(data):
-    if not os.path.exists(USER_PROFILE_PATH) or os.stat(USER_PROFILE_PATH).st_size == 0:
-        initialStructure = {
-            "name": "",
-            "age": 0,
-            "height_in_cm": 0,
-            "location": "",
-            "water_target_litres": 1.0,
-            "workout_sessions_target": 1,
-            "productivity_minutes_target": 10
-        }
-
-        with open(USER_PROFILE_PATH, "w") as file:
-            json.dump(initialStructure, file, indent=4)
-    
-
-    with open(USER_PROFILE_PATH, "w") as file:
-        json.dump(data, file, indent=4, default=str)
-
-def loadChatHistory():
-    if not os.path.exists(CHAT_HISTORY_PATH) or os.stat(CHAT_HISTORY_PATH).st_size == 0:
-        return []
-    
-    try:
-        with open(CHAT_HISTORY_PATH, "r") as file:
-            messages = json.load(file)
-            return messages
-    except json.JSONDecodeError:
-        return []
-
-def saveChatHistory(messages):
-    with open(CHAT_HISTORY_PATH, "w") as file:
-        json.dump(messages, file, indent=4, default=str)
-
-def loadFullRecordData():
-    if not os.path.exists(FILE_PATH) or os.stat(FILE_PATH).st_size == 0:
-        return None
-    
-    try:
-        with open(FILE_PATH, "r") as file:
-            data = json.load(file)
-            return data
-    except json.JSONDecodeError:
-        return None
-
-def saveFullRecordData(data):
-    with open(FILE_PATH, "w") as file:
-        json.dump(data, file, indent=4, default=str)
+    body = dict(data)
+    body["id"] = 1
+    post("profile", body, extra_headers={
+        "Prefer": "resolution=merge-duplicates"
+    })
 
 def loadUserProfile():
-    if not os.path.exists(USER_PROFILE_PATH) or os.stat(USER_PROFILE_PATH).st_size == 0:
+    rows = get("profile", params={
+        "id": "eq.1",
+        "select": "*"
+    })
+
+    if rows:
+        return rows[0]
+    else:
         return None
 
-    try:
-        with open(USER_PROFILE_PATH, "r") as file:
-            profile = json.load(file)
-            return profile
-    except json.JSONDecodeError:
+def loadFullRecordData():
+    rows = get("logs", params={
+        "select": "id,category,log_date,log_time,payload",
+        "order": "log_date.asc"
+    })
+
+    if not rows:
         return None
+    
+    data = {
+        "diet": [],
+        "water": [],
+        "workout": [],
+        "context": [],
+        "productivity": [],
+        "ai_reviews": [],
+        "fortnightly": [],
+        "weekly_recap": []
+    }
+
+    for row in rows:
+        category = row["category"]
+        payload = row["payload"] or {}
+
+        if category == "ai_reviews":
+            entry = {
+                "date": row["log_date"],
+                "_id": row["id"],
+                **payload
+            }
+        else:
+            entry = {
+                **payload,
+                "date": row["log_date"],
+                "time": row["log_time"],
+                "_id": row["id"]
+            }
+        
+        data.setdefault(category, []).append(entry)
+
+    return data
+
+def updateLogEntry(entryId, updates):
+    body = {}
+
+    if "date" in updates:
+        body["log_date"] = updates.pop("date")
+    if "time" in updates:
+        body["log_time"] = updates.pop("time")
+    
+    if updates:
+        body["payload"] = updates
+    
+    patch(f"logs?id=eq.{entryId}", body)
+
+def deleteLogEntry(entryId):
+    delete(f"logs?id=eq.{entryId}")
+
+def loadChatHistory():
+    rows = get("chat_messages", params={
+        "select": "role,content",
+        "order": "created_at.asc"
+    })
+
+    return rows or []
+
+def appendChatMessage(role, content):
+    post("chat_messages", {
+        "role": role,
+        "content": content
+    })
+
+def uploadProgressPhoto(filename, fileBytes, contentType):
+    url = f"{SUPABASE_URL}/storage/v1/object/progress-photos/{filename}"
+
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": contentType
+    }
+
+    response = requests.post(url, headers=headers, data=fileBytes)
+
+    response.raise_for_status()
+
+    return f"{SUPABASE_URL}/storage/v1/object/public/progress-photos/{filename}"
