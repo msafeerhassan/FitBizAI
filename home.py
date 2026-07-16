@@ -271,3 +271,273 @@ def renderWeeklyRecap(recap):
     
     return html + "</div>"
 
+@homeBp.route("/", methods=["GET"])
+def home():
+    history = loadFullRecordData()
+    profile = loadUserProfile()
+
+    if not profile:
+        return renderPage("Home", '<p>No profile Found. <a href="/signup">Sign Up First</a>.</p>')
+    
+    waterTarget = profile.get("water_target_litres", 1.0)
+    workoutTarget = profile.get("workout_sessions_target", 1)
+    productivityTarget = profile.get("productivity_minutes_target", 10)
+
+    today = todaySummary(history)
+    streak = calculateStreak(history)
+    waterStreak = calculateGoalStreak(history, "water", waterTarget, valueKey="amount", mode="sum")
+    workoutStreak = calculateGoalStreak(history, "workout", workoutTarget, mode="count")
+    productivityStreak = calculateGoalStreak(history, "productivity", productivityTarget, valueKey="time_spent", mode="sum")
+
+    body = f"""
+<h2>FitBizAI</h2>
+<div class="card">
+{renderMetric("Reporting Streak", f"{streak} days")}
+{renderMetric("Water Streak", f"{waterStreak} days")}
+{renderMetric("Workout Streak", f"{workoutStreak} days")}
+{renderMetric("Productivity Streak", f"{productivityStreak} days")}
+</div>
+<div class="card">
+    {renderMetric("Water Today", f"{today['water']:.2f} / {waterTarget} L")}
+    {renderMetric("Meals Logged", len(today['diet']))}
+    {renderMetric("Workouts", len(today['workout']))}
+    {renderMetric("Productive Minutes Spent", f"{today['productivity']:.0f} / {productivityTarget}")}
+</div>
+<div class="card"><h4>Meal Log</h4>
+"""
+    
+    if today["diet"]:
+        for meal in today["diet"]:
+            body += f"<p><strong>{meal.get('time')}</strong> - {meal.get("item")}</p>"
+    else:
+        body += "<p>No meals logged today yet :(</p>"
+    
+    body += "</div></div class=\"card\"><h4>Workout Log</h4>"
+
+    if today["workout"]:
+        for w in today["workout"]:
+            body += f"<p><strong>{w.get('time')}</strong> - {w.get("type")} ({w.get('amount')})</p>"
+    else:
+        body += "<p>No workout sessions logged today yet :(</p>"
+
+    body += "</div></div class=\"card\"><h4>Additional Context</h4>"
+
+    if today["context"]:
+        for c in today["context"]:
+            body += f"<p><strong>{c.get('time')}</strong> - {c.get("text")}</p>"
+    else:
+        body += "<p>No workout sessions logged today yet :(</p>"
+    
+    body += "</div>"
+
+    body += "<h3>Daily Report Compilation</h3>"
+
+    existingReview = todayReviewExist(history)
+
+    if existingReview:
+        body += "<p>You have already generated today\'s report. Come back tomorrow.</p>"
+        body += renderReviewBody(existingReview)
+    else:
+        body += '''
+<div class="card">
+    <button onclick="generateReport()">Compile & Share Report with AI</button>
+    <div id="report-result"></div>
+</div>
+<script>
+    async function generateReport() {
+        document.getElementById("report-result").innerHTML = "Analyzing...";
+        const res = await fetch("/generate-report", {
+            method: "POST"
+        });
+        const data = await res.json();
+        if (data.error) {
+            document.getElementById("report-result").innerHTML = "Error: " + data.error;
+        }
+        else {
+            location.reload();
+        }
+    }
+</script>
+'''
+    body += "<h3>Weekly Recap</h3>"
+
+    weeklyRecaps = (history or {}).get("weekly_recap", [])
+
+    if weeklyRecaps:
+        body += renderWeeklyRecap(weeklyRecaps[-1])
+    else:
+        body += "<p>No weekly recap generated yet :(</p>"
+    
+    if weeklyRecapCheck(history):
+        body += '''
+    <div class="card">
+    <button onclick="generateRecap()">Generate Weekly Recap</button>
+    <div id="recap-result"></div>
+</div>
+<script>
+    async function generateRecap() {
+        document.getElementById("recap-result").innerHTML = "Compiling...";
+        const res = await fetch("/generate-weekly-recap", {
+            method: "POST"
+        });
+        const data = await res.json();
+
+        if (data.error) {
+            document.getElementById("recap-result").innerHTML = "Error: " + data.error;
+        }
+        else {
+            location.reload();
+        }
+    }
+</script>
+'''
+    else:
+        body += "<p>Your next weekly recap will be available once the current week is over :)</p>"
+
+    return renderPage("Home", body)
+
+@homeBp.route("/generate-report", methods= ["POST"])
+def generateReport():
+    history = loadFullRecordData()
+    profile = loadUserProfile()
+
+    if not history:
+        return jsonify(
+            {
+                "error": "No record data found yet :("
+            }
+        ), 400
+    
+    today = todaySummary(history)
+    todayDate = date.today()
+    forteenDaysAgo = todayDate - timedelta(days=14)
+
+    slicedHistory = {
+        "diet": [],
+        "water": [],
+        "workout": [],
+        "context": [],
+        "productivity": [],
+        "ai_reviews": []
+    }
+
+    for category in slicedHistory:
+        for item in history.get(category, []):
+            itemDate = date.fromisoformat(item.get("date", ""))
+
+            if forteenDaysAgo <= itemDate < todayDate:
+                slicedHistory[category].append(item)
+
+    todayStr = todayDate.isoformat()
+
+    todayImages = []
+
+    currentWeight = "Not Reported Today"
+
+    for checkin in history.get("fortnightly", []):
+        if checkin.get("date") == todayStr:
+            todayImages = checkin.get("image_paths", [])
+            currentWeight = f"{checkin.get("weight")} kg"
+            break
+    
+    yesterdayGoals = getYesterdayGoals(history)
+
+    USER_PROMPT = f"""
+Here is the complete configuration dataset for evaluation:
+
+GOALS SET FOR TODAY (from yesterday's report): {yesterdayGoals if yesterdayGoals else "No goals were set yesterday - either this is a new user or yesterday's report was skipped :(."}
+
+TODAY'S METRICS:
+- Date: {todayStr}
+- Current Weight: {currentWeight}
+- Water Intake volume: {today['water']:.2f} Litres
+- Meals logged: {today['diet']}
+- Workouts performed: {today['workout']}
+- Additional Log Context: {today['context']}
+- Vision Assets Attached: {"Yes, " + str(len(todayImages)) + " images provided" if todayImages else "No, this is a normal tracking day"}
+- Productivity: {today['productivity']}
+
+PREVIOUS 14-DAY PERFORMANCE HISTORY:
+{slicedHistory}
+
+General User information: {profile}
+"""
+    try:
+        response = runAIdaily(DAILY_SYSTEM_PROMPT, USER_PROMPT, imagePaths=todayImages)
+
+        reviewData = {
+            "date": todayStr,
+            "scores": response.get("scores", {}),
+            "analysis": response.get("analysis", {}),
+            "goal_review": response.get("goal_review", {})
+        }
+
+        saveData("ai_reviews", reviewData)
+        return jsonify(
+            {
+                "ok": True
+            }
+        )
+    except Exception as e:
+        return jsonify(
+            {
+                "error": str(e)
+            }
+        ), 500
+
+@homeBp.route("/generate-weekly-recap", methods=["POST"])
+def generateWeeklyRecap():
+    history = loadFullRecordData()
+    if not history:
+        return jsonify(
+            {
+                "error": "No record data found yet :("
+            }
+        ), 400
+    
+    today = date.today()
+
+    sevenDaysAgo = today - timedelta(days=7)
+
+    slicedWeek = {
+        "diet": [],
+        "water": [],
+        "workout": [],
+        "context": [],
+        "productivity": []
+    }
+
+    for category in slicedWeek:
+        for item in history.get(category, []):
+            itemDate = date.fromisoformat(item.get("date", ""))
+
+            if sevenDaysAgo <= itemDate < today:
+                slicedWeek[category].append(item)
+    USER_PROMPT_WEEKLY = f"""
+Here is the user's data for the past seven days: {slicedWeek}
+"""
+    
+    try:
+        response = runAIdaily(WEEKLY_SYSTEM_PROMPT, USER_PROMPT_WEEKLY)
+
+        recapData = {
+            "date": today.isoformat(),
+            "weekly_summary": response.get("weekly_summary", ""),
+            "achievements": response.get("achievements", []),
+            "areas_to_improve": response.get("areas_to_improve", []),
+            "next_week_focus": response.get("next_week_focus", [])
+        }
+
+        saveData("weekly_recap", recapData)
+
+        return jsonify(
+            {
+                "ok": True
+            }
+        )
+    except Exception as e:
+        return jsonify(
+            {
+                "error": str(e)
+            }
+        ), 500
