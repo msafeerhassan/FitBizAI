@@ -1,31 +1,44 @@
-import streamlit as st
+from flask import Blueprint, request, redirect
 from db import loadUserProfile, saveUserProfile
+from layout import renderPage
 
-st.header("Goals & Targets")
+targetsBp = Blueprint("targets", __name__)
 
-userProfile = loadUserProfile()
+@targetsBp.route("/targets", methods = [
+    "GET",
+    "POST"
+])
 
-if not userProfile:
-    st.info("No user profile found - sign up first please.")
-    st.stop()
+def targets():
 
-waterTarget = userProfile.get("water_target_litres", 1)
-workoutTarget = userProfile.get("workout_sessions_target", 1)
-productivityTarget = userProfile.get("productivity_minutes_target", 10)
+    userProfile = loadUserProfile()
 
-with st.form(key="editTargetsForm", border=False):
-    st.markdown("### Daily Targets")
+    if not userProfile:
+        return renderPage("Targets", '<p>No user profile found - <a href="/signup">sign up first please</a></p>')
 
-    newWaterTarget = st.number_input("Water Target (Litres/day): ", min_value=0.1, value=float(waterTarget))
-    newWorkoutTarget = st.number_input("Workout Sessions Target (per day): ", min_value=1, value=int(workoutTarget))
-    newProductivityTarget = st.number_input("Productivity Target (minutes/day): ", min_value=1, value=int(productivityTarget))
+    waterTarget = userProfile.get("water_target_litres", 1.0)
+    workoutTarget = userProfile.get("workout_sessions_target", 1)
+    productivityTarget = userProfile.get("productivity_minutes_target", 10)
 
-    saveBtn = st.form_submit_button("Save Targets", type="primary")
+    if request.method == "POST":
+        userProfile["water_target_litres"] = float(request.form.get("water", waterTarget))
+        userProfile["workout_sessions_target"] = int(request.form.get("workout", workoutTarget))
+        userProfile["productivity_minutes_target"] = int(request.form.get("productivity", productivityTarget))
 
-if saveBtn:
-    userProfile["water_target_litres"] = newWaterTarget
-    userProfile["workout_sessions_target"] = newWorkoutTarget
-    userProfile["productivity_minutes_target"] = newProductivityTarget
+        saveUserProfile(userProfile)
+        return redirect("/targets")
 
-    saveUserProfile(userProfile)
-    st.success("Targets Updated!")
+    body = f"""
+<h2>Goals & Targets</h2>
+<form method="POST" class="card">
+    <label>Water Target (Litres/day)</label>
+    <input name="water" type="number" step="0.1" min="0.1" value="{waterTarget}">
+    <label>Workout Sessions Target (per day)</label>
+    <input name="workout" type="number" min="1" value="{workoutTarget}">
+    <label>Productivity Target (minutes/day)</label>
+    <input type="number" name="productivity" min="1" value="{productivityTarget}">
+    <button type="submit">Save Targets</button>
+</form>
+"""
+    
+    return renderPage("Targets", body)

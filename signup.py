@@ -1,24 +1,39 @@
-import streamlit as st
+from flask import Blueprint, request, redirect
+from layout import renderPage
 from db import saveUserProfile
 
-with st.form(key="signup", border=False):
-    st.header("Sign Up")
+signupBp = Blueprint("signup", __name__)
 
-    name = st.text_input(label="Enter your name: ")
-    age = st.number_input(label="Enter your age: ", min_value=13)
-    height = st.number_input(label="Enter your height (cm): ", min_value=50)
-    location = st.text_input(label="Enter your location", placeholder="Texas, US")
+@signupBp.route("/signup", methods = [
+    "GET",
+    "POST"
+])
 
-    btn = st.form_submit_button(label="Sign Up", type="primary")
+def signup():
+    if request.method == "POST":
+        data = {
+            "name": request.form.get("name", ""),
+            "age": int(request.form.get("age", 13)),
+            "height_in_cm": int(request.form.get("height", 50)),
+            "location": request.form.get("location", "")
+        }
 
-if btn:
-    data = {
-        "name": name,
-        "age": age,
-        "height_in_cm": height,
-        "location": location
-    }
+        saveUserProfile(data)
+        return redirect("/")
+    
+    body = """
+<h2>Sign Up</h2>
+<form method="POST" class="card">
+    <label>Name</label>
+    <input name="name" required>
+    <label>Age</label>
+    <input type="number" name="age" min="13" required>
+    <label>Height (cm)</label>
+    <input type="number" name="height" min="50" required>
+    <label>Location</label>
+    <input name="location" placeholder="Texas, US" required>
+    <button type="submit">Sign Up</button>
+</form>
+    """
 
-    saveUserProfile(data)
-
-    st.success("User Profile Successfully Created! Refresh to access application.")
+    return renderPage("Sign Up", body)

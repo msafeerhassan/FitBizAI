@@ -1,26 +1,13 @@
-import streamlit as st
-import pandas as pd
 from datetime import date, timedelta
-import json, os
-from db import loadUserProfile
+import json
+from flask import Blueprint
+from db import loadUserProfile, loadFullRecordData
+from layout import renderPage
 
-RECORD_FILE = "record.json"
-
-st.header("FitBizAI - Insights")
+insightsBp = Blueprint("insights", __name__)
 
 daysRange = 30
 weightDaysRange = 90
-
-def loadData():
-
-    if not os.path.exists(RECORD_FILE) or os.stat(RECORD_FILE).st_size == 0:
-        return None
-    
-    try:
-        with open(RECORD_FILE, "r") as file:
-            return json.load(file)
-    except json.JSONDecodeError:
-        return None
     
 def getDateRange(days):
     today = date.today()
@@ -29,9 +16,8 @@ def getDateRange(days):
     dayOff = days - 1
 
     while dayOff >= 0:
-        currentDay = today - timedelta(days=dayOff)
-        dateList.append(currentDay)
-        dayOff = dayOff - 1
+        dateList.append(today - timedelta(days=dayOff))
+        dayOff -= 1
 
     return dateList
 
@@ -49,19 +35,16 @@ def aggrDaily(records, dateRange, valueKey = None, mode="sum"):
     
     result = {}
 
-    for isoDate in bkts:
-        entries = bkts[isoDate]
-
+    for isoDate, entries in bkts.items():
         if mode == "count":
             result[isoDate] = len(entries)
-        elif mode == "sum":
+        else:
             total = 0.0
             for entry in entries:
-                rawVal = entry.get(valueKey, 0)
                 try:
-                    total = total + float(rawVal)
+                    total += float(entry.get(valueKey, 0))
                 except (ValueError, TypeError):
-                    total = total
+                    pass
             
             result[isoDate] = total
     return result
@@ -83,13 +66,13 @@ def extractAIScores(reviews, dateRange):
         reviewDate = review.get("date")
         if reviewDate in rows:
             scores = review.get("scores", {})
-            rows[reviewDate]["diet"] = scores.get("diet")
-            rows[reviewDate]["water"] = scores.get("water")
-            rows[reviewDate]["workout"] = scores.get("workout")
-            rows[reviewDate]["productivity"] = scores.get("productivity")
-    
-    scoresDf = pd.DataFrame.from_dict(rows, orient="index")
-    return scoresDf
+            rows[reviewDate] = {
+                "diet": scores.get("diet"),
+                "water": scores.get("water"),
+                "workout": scores.get("workout"),
+                "productivity": scores.get("productivity")
+            }
+    return rows
 
 def extractWeight(fortnightlyLogs, dateRange):
     startDate = dateRange[0]
@@ -107,112 +90,167 @@ def extractWeight(fortnightlyLogs, dateRange):
 
         if logDate >= startDate and logDate <= endDate:
             rows[logDateStr] = log.get("weight")
+
+    return dict(sorted(rows.items()))
+
+@insightsBp.route("/insights", methods = ["GET"])
+def insights():
+    data = loadFullRecordData()
+
+    if not data:
+        return renderPage("Insights", "<p>No Data recorded yet :( Start Logging to see insights here.</p>")
     
-    weightDf = pd.DataFrame.from_dict(rows, orient="index", columns=["weight"])
-    weightDf = weightDf.sort_index()
+    userProfile = loadUserProfile()
 
-    return weightDf
+    if userProfile:
+        waterTarget = userProfile.get("water_target_litres", 1.0)
+        workoutTarget = userProfile.get("workout_sessions_target", 1)
+        productivityTarget = userProfile.get("productivity_minutes_target", 10)
+    else:
+        waterTarget, workoutTarget, productivityTarget = 1.0, 1, 10
+    
+    dateRange = getDateRange(daysRange)
 
+    labels = []
 
-data = loadData()
+    for d in dateRange:
+        labels.append(d.isoformat())
+    
+    waterData = aggrDaily(data.get("water", []), dateRange, valueKey="amount", mode="sum")
+    workoutData = aggrDaily(data.get("workout", []), dateRange, mode="count")
+    productivityData = aggrDaily(data.get("productivity", []), dateRange, valueKey="time_spent", mode="sum")
+    scoresData = extractAIScores(data.get("ai_reviews", []), dateRange)
 
-if not data:
-    st.info("No Data Recorded Yet :( Start logging to see insights here!")
-    st.stop()
+    weightDateRange = getDateRange(weightDaysRange)
 
-dateRange = getDateRange(daysRange)
+    weightRows = extractWeight(data.get("fortnightly", []), weightDateRange)
 
-userProfile = loadUserProfile()
+    water = []
+    workout = []
+    productivity = []
+    dietScore = []
+    waterScore = []
+    workoutScore = []
+    productivityScore = []
 
-if userProfile:
-    waterTarget = userProfile.get("water_target_litres", 1.0)
-    workoutTarget = userProfile.get("workout_sessions_target", 1)
-    productivityTarget = userProfile.get("productivity_minutes_target", 10)
-else:
-    waterTarget = 1.0
-    workoutTarget = 1
-    productivityTarget = 10
+    for d in labels:
+        water.append(waterData[d])
+        workout.append(workoutData[d])
+        productivity.append(productivityData[d])
 
-weightDateRange = getDateRange(weightDaysRange)
+        dayScores = scoresData[d]
+        dietScore.append(dayScores["diet"])
+        waterScore.append(dayScores["water"])
+        workoutScore.append(dayScores["workout"])
+        productivityScore.append(dayScores["productivity"])
+    
+    weightLabels = []
+    weightVals = []
 
-st.markdown("### Water Intake (Litres/day)")
-
-waterRecords = data.get("water", [])
-
-waterData = aggrDaily(waterRecords, dateRange, valueKey="amount", mode="sum")
-waterChartData = {}
-
-for isoDate in waterData:
-    waterChartData[isoDate] = {
-        "Actual [L]": waterData[isoDate],
-        "Target [L]": waterTarget
+    for key, value in weightRows.items():
+        weightLabels.append(key)
+        weightVals.append(value)
+    
+    chartData = {
+        "labels": labels,
+        "water": water,
+        "waterTarget": waterTarget,
+        "workout":workout,
+        "workoutTarget" : workoutTarget,
+        "productivity": productivity,
+        "productivityTarget": productivityTarget,
+        "dietScore": dietScore,
+        "waterScore": waterScore,
+        "workoutScore": workoutScore,
+        "productivityScore": productivityScore,
+        "weightLabels": weightLabels,
+        "weightValues": weightVals
     }
 
-waterDf = pd.DataFrame.from_dict(waterChartData, orient="index")
-st.line_chart(waterDf)
+    body = f"""
+<h2>Insights</h2>
+<div class="card"><h4>Water Intake (Litres/day)</h4><canvas id="waterChart"></canvas></div>
+<div class="card"><h4>Workout Sessions (count/day)</h4><canvas id="workoutChart"></canvas></div>
+<div class="card"><h4>Productive Minutes Spent/day</h4><canvas id="productivityChart"></canvas></div>
+<div class="card"><h4>AI Coach Scores (out of 10)</h4><canvas id="scoresChart"></canvas></div>
+<div class="card"><h4>Weight Trend (kg's)</h4></div>
+"""
+    
+    if not weightRows:
+        body += f"<p class=\"caption\">No Fortnightly Weight Recorded in last {daysRange} days.</p></div>"
+    else:
+        body += '<canvas id="weightChart"></canvas></div>'
+    
+    body += f"""
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
 
-st.markdown("### Workout Sessions (count/day)")
+const data = {
+    json.dumps(chartData)
+};
 
-workoutRecords = data.get("workout", [])
-workoutData = aggrDaily(workoutRecords, dateRange, mode="count")
+function lineChart(id, labels, datasets) {{
+    new Chart(document.getElementById(id), {{
+        type: "line",
+        data: {{
+            labels,
+            datasets
+        }}
+    }});
+}}
 
-workoutChartData = {}
+lineChart("waterChart", data.labels, [
+    {{
+        label: "Actual (L)", data: data.water, borderColor: "#2563eb"
+    }},
+    {{
+        label: "Target (L)", data: data.labels.map(() => data.waterTarget), borderColor: "#999", borderDash: [5,5]
+    }}
+]);
 
-for isoDate in workoutData:
-    workoutChartData[isoDate] = {
-        "Actual Sessions": workoutData[isoDate],
-        "Target Sessions": workoutTarget
-    }
+lineChart("workoutChart", data.labels, [
+    {{
+        label: "Actual Sessions", data: data.workout, borderColor: "#16a34a"
+    }},
+    {{
+        label: "Target Sessions", data: data.labels.map(() => data.workoutTarget), borderColor: "#999", borderDash: [5,5]
+    }}
+]);
 
-workoutDf = pd.DataFrame.from_dict(workoutChartData, orient="index")
-st.line_chart(workoutDf)
+lineChart("productivityChart", data.labels, [
+    {{
+        label: "Actual (min)", data: data.productivity, borderColor: "#d97706"
+    }},
+    {{
+        label: "Target (min)", data: data.labels.map(() => data.productivityTarget), borderColor: "#999", borderDash: [5,5]
+    }}
+]);
 
-st.markdown("### Productive Minutes Spent/day")
+lineChart("scoresChart", data.labels, [
+    {{
+        label: "Diet", data: data.dietScore, borderColor: "#ef4444"
+    }},
+    {{
+        label: "Water", data: data.waterScore, borderColor: "#2563eb"
+    }},
+    {{
+        label: "Workout", data: data.workoutScore, borderColor: "#16a34a"
+    }},
+    {{
+        label: "Productivity", data: data.productivityScore, borderColor: "#d97706"
+    }}
+]);
 
-productivityRecord = data.get("productivity", [])
-productivityData = aggrDaily(productivityRecord, dateRange, valueKey="time_spent", mode="sum")
-productivityChartData = {}
+if (data.weightLabels.length) {{
+    lineChart("weightChart", data.weightLabels, [
+        {{
+            label: "Weight (kg)",
+            data: data.weightValues,
+            borderColor: "#7c3aed"
+        }}
+    ]);
+}}
+</script>
+"""
 
-for isoDate in productivityData:
-    productivityChartData[isoDate] = {
-        "Actual (min)": productivityData[isoDate],
-        "Target (min)": productivityTarget
-    }
-
-productivityDf = pd.DataFrame.from_dict(productivityChartData, orient="index")
-st.line_chart(productivityDf)
-
-st.markdown("### AI Coach Scores (out of 10)")
-
-reviewRecord = data.get("ai_reviews", [])
-scoresDf = extractAIScores(reviewRecord, dateRange)
-
-scoreCol1, scoreCol2 = st.columns(2)
-
-with scoreCol1:
-    st.markdown("#### Diet Score")
-    dietSeries = scoresDf["diet"]
-    st.line_chart(dietSeries)
-
-    st.markdown("#### Workout Score")
-    workoutSeries = scoresDf["workout"]
-    st.line_chart(workoutSeries)
-
-with scoreCol2:
-    st.markdown("#### Water Score")
-    waterScoreSeries = scoresDf["water"]
-    st.line_chart(waterScoreSeries)
-
-    st.markdown("#### Productivity Score")
-    productivitySeries = scoresDf["productivity"]
-    st.line_chart(productivitySeries)
-
-st.markdown("### Weight Trend (kg's)")
-
-fortnightlyRecors = data.get("fortnightly", [])
-weightDf = extractWeight(fortnightlyRecors, weightDateRange)
-
-if weightDf.empty:
-    st.caption(f"No Fortnightly Weight Recorded :( in last {daysRange} days.")
-else:
-    st.line_chart(weightDf)
+    return renderPage("Insights", body)

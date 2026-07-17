@@ -18,6 +18,44 @@ def renderPage(title, bodyHtml):
             text-decoration: none;
             color: #2563eb;
         }}
+        .metric {{
+            display: inline-block;
+            margin-right: 24px;
+        }}
+
+        .metric .label {{
+            font-size: 12px;
+            color: #666;
+        }}
+
+        .metric .value {{
+            font-size: 22px;
+            font-weight: 600;
+        }}
+
+        .card {{
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 12px 0;
+        }}
+
+        input, textarea {{
+            display: block;
+            width: 100%;
+            padding: 8px;
+            margin: 6px 0 14px;
+            box-sizing: border-box;
+        }}
+
+        button {{
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 6px;
+            cursor: pointer;
+        }}
     </style>
 </head>
 <body>
