@@ -8,6 +8,7 @@ from pages.addWater import addWaterBp
 from pages.addWorkout import addWorkoutBp
 from pages.addProductivity import addProductivityBp
 from pages.addContext import addContextBp
+from pages.fortnightlyLog import fortnightlyBp
 
 app = Flask(__name__)
 
@@ -20,6 +21,7 @@ app.register_blueprint(addWaterBp)
 app.register_blueprint(addWorkoutBp)
 app.register_blueprint(addProductivityBp)
 app.register_blueprint(addContextBp)
+app.register_blueprint(fortnightlyBp)
 
 if __name__ == "__main__":
     app.run(debug=True)
