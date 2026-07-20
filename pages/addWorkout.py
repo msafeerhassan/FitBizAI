@@ -1,26 +1,43 @@
-import streamlit as st
+from flask import Blueprint, redirect, request
+from datetime import datetime
 from db import saveData
+from layout import renderPage
 
-with st.form(key="addWorkout", clear_on_submit=True, border=False):
+addWorkoutBp = Blueprint("addWorkout", __name__)
 
-    st.header("Log a Workout Performed")
+@addWorkoutBp.route("/log/workout", methods = [
+    "GET",
+    "POST"
+])
 
-    date = st.date_input("Pick a date: ", value="today")
-    time = st.time_input("Pick a time: ", value="now")
+def addWorkout():
+    if request.method == "POST":
+        now = datetime.now()
 
-    type = st.text_input("Enter Workout Type: ", placeholder="Pushups, Pullups etc")
+        data = {
+            "date": request.form.get("date") or now.date().isoformat(),
+            "time": request.form.get("time") or now.strftime("%H:%M:%S"),
+            "type": request.form.get("type", ""),
+            "amount": request.form.get("amount", "1")
+        }
 
-    amount = st.number_input("Enter number: ", min_value=1, placeholder=5)
+        saveData("workout", data)
 
-    addBtn = st.form_submit_button("Log Workout")
+        return redirect("/")
+    
+    body = """
+<h2>Log a Workout</h2>
+<form method="POST" class="card">
+    <label>Date</label>
+    <input type="date" name="date">
+    <label>Time</label>
+    <input type="time" name="time">
+    <label>Workout Type</label>
+    <input type="text" name="type" placeholder="Pushups, Pullups etc.">
+    <label>Number</label>
+    <input type="number" name="amount" min="1">
+    <button type="submit">Log Workout</button>
+</form>
+"""
 
-if addBtn:
-    data = {
-        "date": date.isoformat(),
-        "time": time.strftime("%H:%M:%S"),
-        "type": type,
-        "amount": amount
-    }
-
-    saveData("workout", data)
-    st.success("Workout Logged!")
+    return renderPage("Log Workout", body)

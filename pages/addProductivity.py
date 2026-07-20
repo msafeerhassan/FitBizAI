@@ -1,23 +1,43 @@
-import streamlit as st
+from flask import Blueprint, request, redirect
+from datetime import datetime
 from db import saveData
+from layout import renderPage
 
-with st.form(key="addProductivity", clear_on_submit=True, border=False):
-    st.header("Log Productivity and Deep-Work Sessions")
+addProductivityBp = Blueprint("addProductivity", __name__)
 
-    date = st.date_input(label="Enter the date: ", value="today")
-    time = st.time_input(label="Enter the time: ", value="now")
+@addProductivityBp.route("/log/productivity", methods = [
+    "GET",
+    "POST"
+])
 
-    type = st.text_input(label="Enter the type of work you did: ", placeholder="Coding, Studying...")
-    timeSpent = st.number_input(label="Enter number of minutes you spent on this: ", min_value=1)
+def addProductivity():
+    if request.method == "POST":
+        now = datetime.now()
+        data = {
+            "date": request.form.get("date") or now.date().isoformat(),
+            "time": request.form.get("time") or now.strftime("%H:%M:%S"),
+            "type": request.form.get("type", ""),
+            "time_spent": request.form.get("time_spent", "1")
+        }
 
-    btn = st.form_submit_button(label="Log")
+        saveData("productivity", data)
 
-if btn:
-    data = {
-        "date": date.isoformat(),
-        "time": time.strftime("%H:%M:%S"),
-        "type": type,
-        "time_spent": timeSpent
-    }
+        return redirect("/")
+    
+    body = """
+<h2>Log Work / Productive Time</h2>
+<form method="POST" class="card">
+    <label>Date</label>
+    <input type="date" name="date">
+    <label>Time</label>
+    <input type="time" name="time">
+    <label>Work Type</label>
+    <input type="text" name="type" placeholder="Coding, Studying etc.">
+    <label>Minutes Spent</label>
+    <input type="number" name="time_spent" min="1">
+    <button type="submit">Log Work</button>
+</form>
+"""
 
-    saveData("productivity", data)
+    return renderPage("Log Work", body)
+

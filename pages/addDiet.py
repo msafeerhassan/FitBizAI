@@ -1,22 +1,40 @@
-import streamlit as st
+from flask import Blueprint, request, redirect
+from datetime import datetime
 from db import saveData
+from layout import renderPage
 
-with st.form(key="addDiet", clear_on_submit=True, border=False):
-    st.header("Log a consumed diet")
+addDietBp = Blueprint("addDiet", __name__)
 
-    date = st.date_input("Pick a date: ", value="today")
-    time = st.time_input("Pick a time: ", value="now")
+@addDietBp.route("/log/diet", methods= [
+    "POST",
+    "GET"
+])
 
-    item = st.text_area("What did you consumed:", placeholder="20 Almonds\n5 Protein Bars...", height="content")
+def addDiet():
+    if request.method == "POST":
+        now = datetime.now()
+        data = {
+            "date": request.form.get("date") or now.date().isoformat(),
+            "time": request.form.get("time") or now.strftime("%H:%M:%S"),
+            "item": request.form.get("item", "")
+        }
 
-    addBtn = st.form_submit_button("Log Meal")
+        saveData("diet", data)
 
-if addBtn:
-    data = {
-        "date": date.isoformat(),
-        "time": time.strftime("%H:%M:%S"),
-        "item": item
-    }
+        return redirect("/")
+    
+    body = """
+<h2>Log a Meal</h2>
+<form class="card" method="POST">
+    <label>Date</label>
+    <input type="date" name="date">
+    <label>Time</label>
+    <input type="time" name="time">
+    <label>What did you cosume?</label>
 
-    saveData("diet", data)
-    st.success("Meal Logged Successfully!")
+    <textarea name="item" placeholder="20 Almonds, 5 Protein Bars..."></textarea>
+    <button type="submit">Log Meal</button>
+</form>
+"""
+
+    return renderPage("Log Meal", body)

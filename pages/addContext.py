@@ -1,22 +1,37 @@
-import streamlit as st
+from flask import Blueprint, request, redirect
+from datetime import datetime
 from db import saveData
+from layout import renderPage
 
-with st.form(key="addContext", clear_on_submit=True, border=False):
-    st.header("Log Additional Context")
+addContextBp = Blueprint("addContext", __name__)
 
-    date = st.date_input("Enter date: ", value="today")
-    time = st.time_input("Enter time: ", value="now")
+@addContextBp.route("/log/context", methods = [
+    "GET",
+    "POST"
+])
 
-    text = st.text_area("Log: ", placeholder="Today, we hosted a party so that's why I consumed a lot of soft drinks...", height="content")
+def addContext():
+    if request.method == "POST":
+        now = datetime.now()
+        data = {
+            "date": request.form.get("date") or now.date().isoformat(),
+            "time": request.form.get("time") or now.strftime("%H:%M:%S"),
+            "text": request.form.get("text", "")
+        }
+        saveData("context", data)
+        return redirect("/")
+    
+    body = """
+<h2>Log Additional Context</h2>
+<form method="POST" class="card">
+    <label>Date</label>
+    <input type="date" name="date">
+    <label>Time</label>
+    <input type="time" name="time">
+    <label>Context</label>
+    <textarea name="text" placeholder="I missed workout because of a family emergency..."></textarea>
+    <button type="submit">Log Additional Context</button>
+</form>
+"""
 
-    addBtn = st.form_submit_button("Log Additional Context")
-
-if addBtn:
-    data = {
-        "date": date.isoformat(),
-        "time": time.strftime("%H:%M:%S"),
-        "text": text
-    }
-
-    saveData("context", data)
-    st.success("Context Logged!")
+    return renderPage("Add Context", body)
