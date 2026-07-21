@@ -9,6 +9,8 @@ from pages.addWorkout import addWorkoutBp
 from pages.addProductivity import addProductivityBp
 from pages.addContext import addContextBp
 from pages.fortnightlyLog import fortnightlyBp
+from pages.progressPhotos import progressPhotosBp
+from pages.achievements import achievementsBp
 
 app = Flask(__name__)
 
@@ -22,6 +24,8 @@ app.register_blueprint(addWorkoutBp)
 app.register_blueprint(addProductivityBp)
 app.register_blueprint(addContextBp)
 app.register_blueprint(fortnightlyBp)
+app.register_blueprint(progressPhotosBp)
+app.register_blueprint(achievementsBp)
 
 if __name__ == "__main__":
     app.run(debug=True)

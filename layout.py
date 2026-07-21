@@ -56,6 +56,21 @@ def renderPage(title, bodyHtml):
             border-radius: 6px;
             cursor: pointer;
         }}
+        .badge-earned {{
+            background: #dcfce7;
+            border: 1px solid #16a34a;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 6px;
+        }}
+        .badge-locked {{
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 6px;
+            color: #888;
+        }}
     </style>
 </head>
 <body>

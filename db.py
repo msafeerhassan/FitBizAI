@@ -178,6 +178,7 @@ def uploadProgressPhoto(filename, fileBytes, contentType):
 
     response = requests.post(url, headers=headers, data=fileBytes)
 
-    response.raise_for_status()
+    if not response.ok:
+        raise Exception(f"Supabase Storage Upload Failed ({response.status_code}): {response.text}")
 
     return f"{SUPABASE_URL}/storage/v1/object/public/progress-photos/{filename}"
