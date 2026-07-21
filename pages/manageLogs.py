@@ -1,333 +1,207 @@
-import streamlit as st
-from datetime import date, time, datetime
-from db import loadFullRecordData, saveFullRecordData
+from datetime import date
+from flask import Blueprint, request, redirect
+from db import loadFullRecordData, updateLogEntry, deleteLogEntry
+from layout import renderPage
 
-st.header("Manage Logs")
+manageLogsBp = Blueprint("manageLogs", __name__)
+
+categoryFields = {
+    "diet": [("item", "text")],
+    "water": [("amount", "number")],
+    "workout": [("type", "text"), ("amount", "number")],
+    "context": [("text", "text")],
+    "productivity": [("type", "text"), ("time_spent", "number")]
+}
 
 def getEarliestDate(data):
-    earliestDate = None
-    categories = ["diet", "water", "workout", "context", "productivity"]
+    earliest = None
 
-    for category in categories:
-        categoryRecords = data.get(category, [])
+    for category in categoryFields:
+        for item in data.get(category, []):
+            itemDate = date.fromisoformat(item.get("date", ""))
 
-        for item in categoryRecords:
-            itemDateStr = item.get("date", "")
-            try:
-                itemDate = date.fromisoformat(itemDateStr)
-            except ValueError:
-                continue
-
-            if earliestDate is None:
-                earliestDate = itemDate
-            elif itemDate < earliestDate:
-                earliestDate = itemDate
+            if earliest is None or itemDate < earliest:
+                earliest = itemDate
     
-    return earliestDate
+    return earliest
 
-def sortEntries(categoryRecords, startDate, endDate):
-    indexedEntries = []
+def getDateAndTime(item):
+    dateX = item.get("date", "")
+    time = item.get("time", "")
 
-    for i in range(len(categoryRecords)):
-        entry = categoryRecords[i]
-        entryDateStr = entry.get("date", "")
+    return f"{dateX} {time}"
 
-        try:
-            entryDate = date.fromisoformat(entryDateStr)
-        except ValueError:
-            continue
+def sortEntries(records, startDate, endDate):
+    filtered = []
 
-        if entryDate >= startDate and entryDate <= endDate:
-            indexedEntries.append((i, entry))
+    for entry in records:
+        entryDate = date.fromisoformat(entry.get("date", ""))
+
+        if startDate <= entryDate <= endDate:
+            filtered.append(entry)
+        
+    filtered.sort(key=getDateAndTime, reverse=True)
+
+    return filtered
+
+def renderEntryLine(category, entry, startStr, endStr):
+    entryId = entry.get("_id")
+
+    if category == "diet":
+        label = f"{entry.get("date")} {entry.get("time")} - {entry.get("item")}"
+    elif category == "water":
+        label = f"{entry.get("date")} {entry.get("time")} - {entry.get("amount")} L"
+    elif category == "workout":
+        label = f"{entry.get("date")} {entry.get("time")} - {entry.get("type")} ({entry.get("amount")})"
+    elif category == "context":
+        label = f"{entry.get("date")} {entry.get("time")} - {entry.get("text")}"
+    else:
+        label = f"{entry.get("date")} {entry.get("time")} - {entry.get("type")} ({entry.get("time_spent")} minutes)"
     
-    def sortKey(indexedEntry):
-        entry = indexedEntry[1]
-        dateStr = entry.get("date", "")
-        timeStr = entry.get("time", "")
+    return f"""
+<div class="card" style="display: flex; justify-content: space-between; align-items: center;">
+    <span>{label}</span>
+    <span>
+        <a href="/manage-logs/edit/{entryId}?category={category}&start={startStr}&end={endStr}">Edit</a>
+        &nbsp;
+        <form action="/manage-logs/delete/{entryId}" method="POST" style="display: inline;">
+            <input type="hidden" name="category" value="{category}">
+            <input type="hidden" name="start" value="{startStr}">
+            <input type="hidden" name="end" value="{endStr}">
+            <button type="submit" onclick="return confirm('Delete this entry?')">Delete</button>
+        </form>
+    </span>
+</div>
+"""
 
-        return dateStr + " " + timeStr
+@manageLogsBp.route("/manage-logs", methods = ["GET"])
+def manageLogs():
+    recordData = loadFullRecordData()
 
-    indexedEntries.sort(key=sortKey, reverse=True)
-
-    return indexedEntries
-
-recordData = loadFullRecordData()
-
-if not recordData:
-    st.info("No Data recorded yet - nothing to manage here :(")
-    st.stop()
-
-if "editKey" not in st.session_state:
-    st.session_state["editKey"] = None
-
-st.markdown("### Filter by Date")
-
-earliestDate = getEarliestDate(recordData)
-
-if earliestDate is None:
-    earliestDate = date.today()
-
-filterCol1, filterCol2 = st.columns(2)
-
-with filterCol1:
-    startDate = st.date_input("From:", value=earliestDate)
-
-with filterCol2:
-    endDate = st.date_input("To:", value=date.today())
-
-st.divider()
-
-st.markdown("### Your Logs")
-
-dietTab, waterTab, workoutTab, contextTab, productivityTab = st.tabs(
-    [
-        "Diet",
-        "Water",
-        "Workout",
-        "Context",
-        "Productivity"
-    ]
-)
-
-with dietTab:
-    dietRecords = recordData.get("diet", [])
-
-    filteredDiet = sortEntries(dietRecords, startDate, endDate)
-
-    if not filteredDiet:
-        st.caption("No diet entries in this date range")
-
-    for i, entry in filteredDiet:
-        entryKey = "diet_" + str(i)
-
-        listCol, editCol, deleteCol = st.columns([6, 1, 1])
-
-        with listCol:
-            st.write(f"**{entry.get('date')} {entry.get('time')}** - {entry.get('item')}")
-        with editCol:
-            editClicked = st.button("Edit", key="editbtn_" + entryKey)
-            if editClicked:
-                st.session_state["editKey"] = entryKey
-        with deleteCol:
-            deleteClicked = st.button("Delete", key="deleteBtn_" + entryKey)
-            if deleteClicked:
-                dietRecords.pop(i)
-                saveFullRecordData(recordData)
-                st.success("Entry deleted!")
-                st.rerun()
-        
-        if st.session_state["editKey"] == entryKey:
-            with st.form(key="editForm_" + entryKey):
-                st.markdown("#### Edit Diet Entry")
-
-                newDate = st.date_input("Date: ", value=date.fromisoformat(entry.get("date")))
-                newTime = st.time_input("Time: ", value=time.fromisoformat(entry.get("time")))
-                newItem = st.text_area("Item: ", value=entry.get("item"))
-
-                saveBtn = st.form_submit_button("Save Changes")
-
-            if saveBtn:
-                dietRecords[i]["date"] = newDate.isoformat()
-                dietRecords[i]["time"] = newTime.strftime("%H:%M:%S")
-                dietRecords[i]["item"] = newItem
-
-                saveFullRecordData(recordData)
-                st.session_state["editKey"] = None
-                st.success("Entry Updated")
-                st.rerun()
-
-with waterTab:
-    waterRecords = recordData.get("water", [])
-    filteredWater = sortEntries(waterRecords, startDate, endDate)
-
-    if not filteredWater:
-        st.caption("No water entries logged in this date range")
+    if not recordData:
+        return renderPage("Manage Logs", "<p>No Data Recorded Yet - Nothing to Manage Here :(</p>")
     
-    for i, entry in filteredWater:
-        entryKey = "water_" + str(i)
+    earliestDate = getEarliestDate(recordData) or date.today()
+    todayStr = date.today().isoformat()
 
-        listCol, editCol, deleteCol = st.columns([6,1,1])
+    startStr = request.args.get("start") or earliestDate.isoformat()
+    endStr = request.args.get("end") or todayStr
 
-        with listCol:
-            st.write(f"**{entry.get('date')} {entry.get('time')}** - {entry.get('amount')} L")
-        with editCol:
-            editClicked = st.button("Edit", key="editbtn_" + entryKey)
-            if editClicked:
-                st.session_state["editKey"] = entryKey
-        with deleteCol:
-            deleteClicked = st.button("Delete", key="deleteBtn_" + entryKey)
-            if deleteClicked:
-                waterRecords.pop(i)
-                saveFullRecordData(recordData)
-                st.success("Entry Deleted!")
-                st.rerun()
-        
-        if st.session_state["editKey"] == entryKey:
-            with st.form(key="editForm_" + entryKey):
-                st.markdown("#### Edit Water Entry")
+    startDate = date.fromisoformat(startStr)
+    endDate = date.fromisoformat(endStr)
 
-                newDate = st.date_input("Date: ", value=date.fromisoformat(entry.get("date")))
-                newTime = st.time_input("Time: ", value=time.fromisoformat(entry.get("time")))
-                newAmount = st.number_input("Amount (Liters): ", value=float(entry.get("amount")), min_value=0.01)
-
-                saveBtn = st.form_submit_button("Save Changes")
-            if saveBtn:
-                waterRecords[i]["date"] = newDate.isoformat()
-                waterRecords[i]["time"] = newTime.strftime("%H:%M:%S")
-                waterRecords[i]["amount"] = newAmount
-
-                saveFullRecordData(recordData)
-
-                st.session_state["editKey"] = None
-                st.success("Entry Updated")
-                st.rerun()
-
-with workoutTab:
-    workoutRecords = recordData.get("workout", [])
-    filteredWorkout = sortEntries(workoutRecords, startDate, endDate)
-
-    if not filteredWorkout:
-        st.caption("No workout entries in this date range!")
+    body = f"""
+<h2>Manage Logs</h2>
+<form class="card" method="GET">
+    <label>From</label>
+    <input type="date" name="start" value="{startStr}">
+    <label>To</label>
+    <input type="date" name="end" value="{endStr}">
+    <button type="submit">Filter</button>
+</form>    
+"""
     
-    for i, entry in filteredWorkout:
-        entryKey = "workout_" + str(i)
+    labels = {
+        "diet": "Diet",
+        "water": "Water",
+        "workout": "Workout",
+        "context": "Context",
+        "productivity": "Productivity"
+    }
 
-        listCol, editCol, deleteCol = st.columns([6,1,1])
+    for category, label in labels.items():
+        body += f"<h3>{label}</h3>"
 
-        with listCol:
-            st.write(f"**{entry.get('date')} {entry.get('time')}** - {entry.get('type')} ({entry.get('amount')})")
-        with editCol:
-            editClicked = st.button("Edit", key="editbtn_" + entryKey)
+        entries = sortEntries(recordData.get(category, []), startDate ,endDate)
 
-            if editClicked:
-                st.session_state["editKey"] = entryKey
-        
-        with deleteCol:
-            deleteClicked = st.button("Delete", key="deleteBtn_" + entryKey)
-            if deleteClicked:
-                workoutRecords.pop(i)
-                saveFullRecordData(recordData)
-                st.success("Entry Deleted!")
-                st.rerun()
-        
-        if st.session_state["editKey"] == entryKey:
-            with st.form(key="editForm_" + entryKey):
-                st.markdown("#### Edit Workout Entry")
+        if not entries:
+            body += f'<p>No {label.lower()} entries in this date range</p>'
+        else:
+            for entry in entries:
+                body += renderEntryLine(category, entry, startStr, endStr)
+    return renderPage("Manage Logs", body)
 
-                newDate = st.date_input("Date: ", value=date.fromisoformat(entry.get("date")))
-                newTime = st.time_input("Time: ", value=time.fromisoformat(entry.get("time")))
-                newType = st.text_input("Workout Type: ", value=entry.get("type"))
-                newAmount = st.number_input("Amount: ", value=int(entry.get("amount")), min_value=1)
+@manageLogsBp.route("/manage-logs/edit/<entryId>", methods = [
+    "GET",
+    "POST"
+])
+def editLog(entryId):
+    if request.method == "GET":
+        category = request.args.get("category")
+    else:
+        category = request.form.get("category")
+    if request.method == "GET":
+        startStr = request.args.get("start")
+    else:
+        startStr = request.form.get("start", "")
+    if request.method == "GET":
+        endStr = request.args.get("end")
+    else:
+        endStr = request.form.get("end", "")
 
-                saveBtn = st.form_submit_button("Save Changes")
-            if saveBtn:
-                workoutRecords[i]["date"] = newDate.isoformat()
-                workoutRecords[i]["time"] = newTime.strftime("%H:%M:%S")
-                workoutRecords[i]["type"] = newType
-                workoutRecords[i]["amount"] = newAmount
-
-                saveFullRecordData(recordData)
-                st.session_state["editKey"] = None
-                st.success("Entry Updated!")
-                st.rerun()
-
-with contextTab:
-    contextRecords = recordData.get("context" ,[])
-    filteredContext = sortEntries(contextRecords, startDate, endDate)
-
-    if not filteredContext:
-        st.caption("No context entries in this date range!")
+    if category not in categoryFields:
+        return redirect("/manage-logs")
     
-    for i, entry in filteredContext:
-        entryKey = "context_" + str(i)
+    if request.method == "POST":
+        updates = {
+            "date": request.form.get("date"),
+            "time": request.form.get("time")
+        }
 
-        listCol, editCol, deleteCol = st.columns([6,1,1])
-
-        with listCol:
-            st.write(f"**{entry.get('date')} {entry.get('time')}** - {entry.get('text')}")
-        with editCol:
-            editClicked = st.button("Edit", key="editbtn_" + entryKey)
-
-            if editClicked:
-                st.session_state["editKey"] = entryKey
-        with deleteCol:
-            deleteClicked = st.button("Delete", key="deleteBtn_" + entryKey)
-            if deleteClicked:
-                contextRecords.pop(i)
-                saveFullRecordData(recordData)
-                st.success("Entry Deleted!")
-                st.rerun()
-
-        if st.session_state["editKey"] == entryKey:
-            with st.form(key="editForm_" + entryKey):
-                st.markdown("#### Edit Context Entry")
-
-                newDate = st.date_input("Date: ", value=date.fromisoformat(entry.get("date")))
-                newTime = st.time_input("Time: ", value=time.fromisoformat(entry.get("time")))
-                newText = st.text_area("Log: ", value=entry.get("text"))
-
-                saveBtn = st.form_submit_button("Save Changes")
+        for fieldName, _ in categoryFields[category]:
+            updates[fieldName] = request.form.get(fieldName)
         
+        updateLogEntry(entryId, updates)
 
-            if saveBtn:
-                contextRecords[i]["date"] = newDate.isoformat()
-                contextRecords[i]["time"] = newTime.strftime("%H:%M:%S")
-                contextRecords[i]["text"] = newText
+        return redirect(f"/manage-logs?start={startStr}&end={endStr}")
+    
+    recordData = loadFullRecordData() or {}
 
-                saveFullRecordData(recordData)
+    entry = None
 
-                st.session_state["editKey"] = None
-                st.success("Entry Updated :)")
-                
-                st.rerun()
+    categoryItems = recordData.get(category, [])
 
-with productivityTab:
-    productivityRecords = recordData.get("productivity", [])
-    filteredProductivity = sortEntries(productivityRecords, startDate, endDate)
+    for e in categoryItems:
+        if str(e.get("_id")) == entryId:
+            entry = e
+            break
+    
+    if not entry:
+        return renderPage("Edit Entry", "<p>Entry not found :(</p>")
+    
+    fieldsHtml = ""
 
-    if not filteredProductivity:
-        st.caption("No productivity entries in this date range :(")
-
-    for i, entry in filteredProductivity:
-        entryKey = "productivity_" + str(i)
-
-        listCol, editCol, deleteCol = st.columns([6, 1,1])
-
-        with listCol:
-            st.write(f"**{entry.get('date')} {entry.get("time")}** - {entry.get('type')} ({entry.get('time_spent')} min)")
-        with editCol:
-            editClicked = st.button("Edit", key="editbtn_" + entryKey)
-            if editClicked:
-                st.session_state["editKey"] = entryKey
-
-        with deleteCol:
-            deleteClicked = st.button("Delete", key="deleteBtn_" + entryKey)
-
-            if deleteClicked:
-                productivityRecords.pop(i)
-                saveFullRecordData(recordData)
-                st.success("Entry Deleted!")
-                st.rerun()
-        
-        if st.session_state["editKey"] == entryKey:
-            with st.form(key="editForm_" + entryKey):
-                st.markdown("#### Edit Productivity Entry")
-
-                newDate = st.date_input("Date: ", value=date.fromisoformat(entry.get("date")))
-                newTime = st.time_input("Time: ", value=time.fromisoformat(entry.get("time")))
-                newType = st.text_input("Type: " , value=entry.get("type"))
-                newTimeSpent = st.number_input("Minutes Spent: ", value=int(entry.get("time_spent")), min_value=1)
-
-                saveBtn = st.form_submit_button("Save Changes")
+    for fieldName, fieldType in categoryFields[category]:
+        if fieldType == "text" and fieldName in ("item", "text"):
+            fieldsHtml += f'<label>{fieldName.title()}</label><textarea name="{fieldName}">{entry.get(fieldName, "")}</textarea>'
+        else:
+            if fieldType == "number":
+                inputType = "number"
+            else:
+                inputType = "text"
             
-            if saveBtn:
-                productivityRecords[i]["date"] = newDate.isoformat()
-                productivityRecords[i]["time"] = newTime.strftime("%H:%M:%S")
-                productivityRecords[i]["type"] = newType
-                productivityRecords[i]["time_spent"] = newTimeSpent
+            fieldsHtml += f'<label>{fieldName.replace("_", " ").title()}</label><input type="{inputType}" name="{fieldName}" value="{entry.get(fieldName, "")}">'
+    
+    body = f"""
+    <h2>Edit {category.title()} Entry</h2>
+<form method="POST" class="card">
+    <input type="hidden" name="category" value="{category}">
+    <input type="hidden" name="start" value="{startStr}">
+    <input type="hidden" name="end" value="{endStr}">
+    <label>Date</label>
+    <input type="date" name="date" value="{entry.get('date', '')}">
+    <label>Time</label>
+    <input type="time" name="time" value="{entry.get('time', '')}">
+    {fieldsHtml}
+    <button type="submit">Save Changes</button>
+</form>
+"""
+    return renderPage("Edit Entry", body)
 
-                saveFullRecordData(recordData)
-                st.session_state["editKey"] = None
-                st.success("Entry Updated!")
-                
-                st.rerun()
+@manageLogsBp.route("/manage-logs/delete/<entryId>", methods = ["POST"])
+def deleteLog(entryId):
+    startStr = request.form.get("start", "")
+    endStr = request.form.get("end", "")
+    deleteLogEntry(entryId)
+
+    return redirect(f"/manage-logs?start={startStr}&end={endStr}")
