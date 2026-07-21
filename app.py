@@ -55,14 +55,20 @@ exemptPaths = ("/signup", "/fortnightly")
 
 @app.before_request
 def gatekeeper():
-    if request.path.startswith(exemptPaths):
-        return None
-    
     profile = loadUserProfile()
 
+    if request.path == "/signup":
+        if profile:
+            return redirect("/")
+        return None
     if not profile:
         return redirect("/signup")
     
+    if request.path == "/fortnightly":
+        if not fortnightCheck():
+            return redirect("/")
+        return None
+      
     if fortnightCheck():
         return redirect("/fortnightly")
     
