@@ -1,4 +1,4 @@
-import json
+import json, re
 from datetime import date, timedelta
 from flask import Blueprint, request, jsonify
 from ai import runAIChat
@@ -105,6 +105,16 @@ def coachChat():
 """
     return renderPage("Chat with Coach", body)
 
+def stripMd(text):
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
+    text = re.sub(r"\*(.*?)\*", r"\1", text)
+    text = re.sub(r"`(.*?)`", r"\1", text)
+    text = re.sub(r"^#{1,6}\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^[\*\-•]\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\n{2,}", " ", text)
+
+    return text.strip()
+
 @coachChatBp.route("/coach-chat/send", methods = ["POST"])
 def sendMessage():
     recordData = loadFullRecordData()
@@ -126,15 +136,22 @@ def sendMessage():
     chatHistory = loadChatHistory()
 
     SYSTEM_PROMPT = f"""
-You are supportive and knowledgeable Health, fitness and productivity coach chatting directly with the user in conversational format and tone. You will be given access to user's profile, their last 14 days of logged data. Use the data to give personalized, specific and encouraging advice to user. Keep your responses conversational, concise and avoid sounding robotic in tone. Do not respond in JSON - just reply in plain, friendly text without any specific formatting like * or `. Be hard, firm and strict on what's write - don't blindly agree with everything user says. Be short, concise and direct without any yapping etc.
+You are supportive and knowledgeable Health, fitness and productivity coach chatting directly with the user in conversational format and tone. You will be given access to user's profile, their last 14 days of logged data. Use the data to give personalized, specific and encouraging advice to user. Be hard, firm and strict on what's right - don't blindly agree with everything user says.
 
+STRICT OUTPUT RULES - follow these exactly:
+- Reply in 2 to 4 short sentences maximum, as one flowing paragraph.
+- Never use bullet points, numbered lists, headers, bold, italics, asterisks, backticks, or any markdown syntax whatsoever.
+- Do not respond in JSON.
+- Write like a text message from a knowledgeable friend, not a report.
 
 User Profile: {json.dumps(userProfile)}
 
 Last 14 Days of Logged Data: {historySummary}
 """
+
     try:
         reply = runAIChat(SYSTEM_PROMPT, chatHistory, userMessage)
+        reply = stripMd(reply)
         appendChatMessage("user", userMessage)
         appendChatMessage("assistant", reply)
         return jsonify({

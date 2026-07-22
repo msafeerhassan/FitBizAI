@@ -103,6 +103,7 @@ def renderPage(title, bodyHtml):
         <a href="/fortnightly">Fortnightly Report</a>
         <a href="/coach-chat">Chat with Coach</a>
         <a href="/signup">Sign Up</a>
+        <a href="/logout">Log Out</a>
     </nav>
     <hr>
     {bodyHtml}
