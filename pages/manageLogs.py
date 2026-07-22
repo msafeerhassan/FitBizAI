@@ -6,11 +6,11 @@ from layout import renderPage
 manageLogsBp = Blueprint("manageLogs", __name__)
 
 categoryFields = {
-    "diet": [("item", "text")],
-    "water": [("amount", "number")],
-    "workout": [("type", "text"), ("amount", "number")],
-    "context": [("text", "text")],
-    "productivity": [("type", "text"), ("time_spent", "number")]
+    "diet": [("item", "text", None)],
+    "water": [("amount", "number", "0.01")],
+    "workout": [("type", "text", None), ("amount", "number", "1")],
+    "context": [("text", "text", None)],
+    "productivity": [("type", "text", None), ("time_spent", "number", "1")]
 }
 
 def getEarliestDate(data):
@@ -148,7 +148,7 @@ def editLog(entryId):
             "time": request.form.get("time")
         }
 
-        for fieldName, _ in categoryFields[category]:
+        for fieldName, _, _ in categoryFields[category]:
             updates[fieldName] = request.form.get(fieldName)
         
         updateLogEntry(entryId, updates)
@@ -171,7 +171,7 @@ def editLog(entryId):
     
     fieldsHtml = ""
 
-    for fieldName, fieldType in categoryFields[category]:
+    for fieldName, fieldType, step in categoryFields[category]:
         if fieldType == "text" and fieldName in ("item", "text"):
             fieldsHtml += f'<label>{fieldName.title()}</label><textarea name="{fieldName}">{entry.get(fieldName, "")}</textarea>'
         else:
@@ -180,7 +180,12 @@ def editLog(entryId):
             else:
                 inputType = "text"
             
-            fieldsHtml += f'<label>{fieldName.replace("_", " ").title()}</label><input type="{inputType}" name="{fieldName}" value="{entry.get(fieldName, "")}">'
+            if step:
+                stepAttr = f'step="{step}"'
+            else:
+                stepAttr = ""
+            
+            fieldsHtml += f'<label>{fieldName.replace("_", " ").title()}</label><input type="{inputType}" {stepAttr} name="{fieldName}" value="{entry.get(fieldName, "")}">'
     
     body = f"""
     <h2>Edit {category.title()} Entry</h2>

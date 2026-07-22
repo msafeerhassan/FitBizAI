@@ -55,7 +55,7 @@ def fortnightlyLog():
             return redirect("/")
     
     if error:
-        errorHtml = f'p style="color: #dc2626;">{error}</p>'
+        errorHtml = f'<p style="color: #dc2626;">{error}</p>'
     else:
         errorHtml = ""
     

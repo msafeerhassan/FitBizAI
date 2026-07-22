@@ -173,7 +173,7 @@ def insights():
 <div class="card"><h4>Workout Sessions (count/day)</h4><canvas id="workoutChart"></canvas></div>
 <div class="card"><h4>Productive Minutes Spent/day</h4><canvas id="productivityChart"></canvas></div>
 <div class="card"><h4>AI Coach Scores (out of 10)</h4><canvas id="scoresChart"></canvas></div>
-<div class="card"><h4>Weight Trend (kg's)</h4></div>
+<div class="card"><h4>Weight Trend (kg's)</h4>
 """
     
     if not weightRows:

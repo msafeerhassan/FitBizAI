@@ -4,8 +4,8 @@ import os, json, requests
 load_dotenv()
 
 HCAI_KEY = os.getenv("HCAI_KEY")
-BASE_URL = "https://ai.hackclub.com/proxy/v1"
-model = "qwen/qwen3-32b"
+BASE_URL = "https://ai.hackclub.com/proxy/v1/chat/completions"
+model = "google/gemini-2.5-flash-lite"
 
 def chat(messages, jsonMode=True):
     body = {
@@ -20,13 +20,13 @@ def chat(messages, jsonMode=True):
         }
 
     response = requests.post(
-        f"{BASE_URL}/chat/completions",
+        BASE_URL,
         headers={
             "Authorization": f"Bearer {HCAI_KEY}",
             "Content-Type": "application/json"
         },
         json=body,
-        timeout=55
+        timeout=60
     )
 
     response.raise_for_status()

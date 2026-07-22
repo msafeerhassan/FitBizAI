@@ -71,6 +71,20 @@ def renderPage(title, bodyHtml):
             margin: 6px;
             color: #888;
         }}
+        .chat-msg {{
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin: 8px 0;
+            max-width: 80%;
+        }}
+        .chat-user {{
+            background: #2563eb;
+            color: white;
+            margin-left: auto;
+        }}
+        .chat-assistant {{
+            background: #f0f0f0;
+        }}
     </style>
 </head>
 <body>
