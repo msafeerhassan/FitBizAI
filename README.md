@@ -33,3 +33,6 @@
 4. Run the app using `py app.py`.
 
 #### Screenshots: 
+<img width="1199" height="844" alt="Screenshot 2026-07-22 153006" src="https://github.com/user-attachments/assets/fb4bbb13-b0c1-4684-9140-69825fca8e21" />
+<img width="1212" height="445" alt="Screenshot 2026-07-22 152829" src="https://github.com/user-attachments/assets/8332554e-51fc-4bcc-9680-ffa3fb7a5f14" />
+<img width="1250" height="679" alt="Screenshot 2026-07-22 152742" src="https://github.com/user-attachments/assets/74b7393b-16cd-4ae8-a5ec-db05236375a6" />
